@@ -267,7 +267,7 @@ if uploaded_files:
     chunks = chunk_text(combined_text, chunk_size=3500)
     # Use ThreadPoolExecutor to run concept map generation for each chunk,
     # along with summary and quiz question generation concurrently.
-    with st.spinner("Running all generation tasks concurrently..."):
+    with st.spinner("Okay, let us do the work now. Go ahead and enjoy a YouTube video while you wait!"):
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_maps = [executor.submit(get_concept_map, chunk) for chunk in chunks]
             future_summary = executor.submit(generate_summary, combined_text)
