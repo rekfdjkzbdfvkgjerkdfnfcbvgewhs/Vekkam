@@ -14,7 +14,6 @@ st.title("Vekkam - the Study Buddy of Your Dreams")
 st.text("After the uploaded material is all processed, you can ask your doubts in the panel below.")
 
 # --- Load API Keys ---
-OPENAI_API_KEY = st.secrets["openai_api_key"]
 SERP_API_KEY = st.secrets["serp_api_key"]
 
 # --- Upload Files ---
@@ -39,23 +38,26 @@ def extract_text(file):
         return StringIO(file.getvalue().decode("utf-8")).read()
     return ""
 
-def call_openai(prompt, temperature=0.5, max_tokens=1500):
-    url = "https://api.openai.com/v1/chat/completions"
+def call_gemini(prompt):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json"
     }
-    payload = {
-        "model": "gpt-4",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
-        "max_tokens": max_tokens
+    data = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
     }
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(url, headers=headers, json=data)
     if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"].strip()
+        candidates = response.json().get("candidates", [])
+        if candidates:
+            return candidates[0]["content"]["parts"][0]["text"].strip()
+        else:
+            st.error("No response from Gemini.")
+            return ""
     else:
-        st.error(f"OpenAI API Error: {response.status_code}")
+        st.error(f"Gemini API error: {response.status_code}")
         st.code(response.text)
         return ""
 
@@ -106,7 +108,7 @@ Stick to the format and output only the json response
 Text:
 {text}
 """
-    raw_text = call_openai(prompt)
+    raw_text = call_gemini(prompt)
     try:
         json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
         if json_match:
@@ -173,11 +175,11 @@ def plot_igraph_graph(g):
 
 def generate_questions(text):
     prompt = f"""Generate 5 educational quiz questions based on this content:\n\n{text[:4000]}"""
-    return call_openai(prompt, temperature=0.7)
+    return call_gemini(prompt, temperature=0.7)
 
 def generate_summary(text):
     prompt = f"Summarize the following in 5-7 bullet points:\n\n{text[:4000]}"
-    return call_openai(prompt)
+    return call_gemini(prompt)
 
 def search_serp(query):
     params = {
@@ -199,7 +201,7 @@ Question: {question}
 Context: {context}
 
 Provide a clear, rigorous answer with examples if necessary."""
-    return call_openai(prompt)
+    return call_gemini(prompt)
 
 def process_file(file):
     text = extract_text(file)
