@@ -7,10 +7,11 @@ from io import StringIO
 import igraph as ig
 import plotly.graph_objects as go
 import requests
+import concurrent.futures
 
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
-st.title("Vekkam- the Study Buddy of Your Dreams")
+st.title("Vekkam - the Study Buddy of Your Dreams")
 
 # --- Load API Clients ---
 co = cohere.Client(st.secrets["cohere_api_key"])
@@ -82,7 +83,7 @@ Output should be in the following format:
     }}
   ]
 }}
-Output only the json code.
+
 Text:
 {text}
 """
@@ -109,17 +110,14 @@ def build_igraph_graph(concept_json):
     edges = []
     
     def walk(node, parent_id=None):
-        # Create a unique id for each node using the title and current count
         node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
         description = node.get("description", "No description provided.")
         vertices.append({"id": node_id, "label": node["title"], "description": description})
         if parent_id is not None:
             edges.append((parent_id, node_id))
-        # Process children if present
         for child in node.get("children", []):
             walk(child, node_id)
     
-    # Process the root node: concept_json["topic"] is the main topic.
     root = {
         "title": concept_json["topic"]["title"],
         "description": concept_json["topic"].get("description", "No description provided."),
@@ -127,7 +125,6 @@ def build_igraph_graph(concept_json):
     }
     walk(root)
     
-    # Create the igraph Graph
     g = ig.Graph(directed=True)
     g.add_vertices([v["id"] for v in vertices])
     g.vs["label"] = [v["label"] for v in vertices]
@@ -140,36 +137,27 @@ def plot_igraph_graph(g):
     """
     Compute a layout for the graph using igraph and create an interactive Plotly figure.
     """
-    layout = g.layout("fr")  # Fruchterman-Reingold layout
-    coords = layout.coords  # list of (x, y) tuples
-    
-    # Build edge traces
-    edge_x = []
-    edge_y = []
+    layout = g.layout("fr")
+    coords = layout.coords
+    edge_x, edge_y = [], []
     for edge in g.es:
         src, tgt = edge.tuple
         x0, y0 = coords[src]
         x1, y1 = coords[tgt]
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
-    
     edge_trace = go.Scatter(
         x=edge_x, y=edge_y,
         line=dict(width=1, color='#888'),
         hoverinfo='none',
         mode='lines'
     )
-    
-    # Build node traces with hover text showing title and description
-    node_x = []
-    node_y = []
-    hover_texts = []
+    node_x, node_y, hover_texts = [], [], []
     for i, vertex in enumerate(g.vs):
         x, y = coords[i]
         node_x.append(x)
         node_y.append(y)
         hover_texts.append(f"<b>{vertex['label']}</b><br>{vertex['description']}")
-    
     node_trace = go.Scatter(
         x=node_x, y=node_y,
         mode='markers+text',
@@ -184,7 +172,6 @@ def plot_igraph_graph(g):
         hoverinfo='text',
         hovertext=hover_texts
     )
-    
     fig = go.Figure(
         data=[edge_trace, node_trace],
         layout=go.Layout(
@@ -219,7 +206,6 @@ def generate_summary(text):
     return response.generations[0].text.strip()
 
 def search_serp(query):
-    """Use SerpAPI to get search results for the query."""
     params = {
         "engine": "google",
         "q": query,
@@ -230,7 +216,6 @@ def search_serp(query):
     res = requests.get("https://serpapi.com/search", params=params)
     if res.status_code == 200:
         data = res.json()
-        # Concatenate snippets from the first few organic results for context
         snippets = []
         for result in data.get("organic_results", [])[:3]:
             snippet = result.get("snippet", "")
@@ -240,8 +225,6 @@ def search_serp(query):
     return ""
 
 def answer_doubt(question):
-    """Answer the student's doubt using SerpAPI context and Cohere for math details."""
-    # Retrieve additional context from SerpAPI
     context = search_serp(question)
     prompt = f"""You are an expert math tutor. Answer the following question with a detailed explanation and step-by-step math reasoning.
     
@@ -265,15 +248,28 @@ if uploaded_files:
         st.success(f"✅ Loaded: {file.name}")
         combined_text += extract_text(file) + "\n"
     
-    # Split the full text into manageable chunks for concept mapping
+    # Split full text into chunks
     chunks = chunk_text(combined_text, chunk_size=3500)
+    st.info(f"Processing {len(chunks)} chunks for mind maps...")
+
+    # Use ThreadPoolExecutor to run concept map generation for each chunk,
+    # along with summary and quiz question generation concurrently.
+    with st.spinner("Running all generation tasks concurrently..."):
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Launch tasks for concept maps
+            future_maps = [executor.submit(get_concept_map, chunk) for chunk in chunks]
+            # Launch overall summary and quiz questions tasks concurrently
+            future_summary = executor.submit(generate_summary, combined_text)
+            future_questions = executor.submit(generate_questions, combined_text)
+            
+            # Wait for tasks to complete
+            concept_maps = [future.result() for future in future_maps]
+            summary = future_summary.result()
+            quiz_questions = future_questions.result()
     
-    mind_maps = []
-    for idx, chunk in enumerate(chunks):
-        with st.spinner(f"Processing chunk {idx+1} of {len(chunks)}..."):
-            concept_json = get_concept_map(chunk)
+    # Display each generated mind map
+    for idx, concept_json in enumerate(concept_maps):
         if concept_json:
-            mind_maps.append(concept_json)
             g = build_igraph_graph(concept_json)
             fig = plot_igraph_graph(g)
             st.subheader(f"Interactive Mind Map - Section {idx+1}")
@@ -281,16 +277,12 @@ if uploaded_files:
             with st.expander("📌 Concept Map JSON"):
                 st.json(concept_json)
     
-    # Generate overall summary and quiz questions based on the full text
-    with st.spinner("📚 Generating summary..."):
-        summary = generate_summary(combined_text)
+    # Display overall summary and quiz questions
     st.subheader("Summary")
     st.markdown(summary)
     
-    with st.spinner("🧪 Generating quiz questions..."):
-        questions = generate_questions(combined_text)
     st.subheader("Quiz Questions")
-    st.markdown(questions)
+    st.markdown(quiz_questions)
 else:
     st.info("Upload documents above to begin.")
 
