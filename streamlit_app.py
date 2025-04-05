@@ -198,7 +198,7 @@ def generate_questions(text):
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=400,
+        max_tokens=2000,
         temperature=0.7
     )
     return response.generations[0].text.strip()
@@ -208,7 +208,7 @@ def generate_summary(text):
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=300,
+        max_tokens=2000,
         temperature=0.5
     )
     return response.generations[0].text.strip()
