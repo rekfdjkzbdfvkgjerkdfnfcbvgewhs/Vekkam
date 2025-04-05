@@ -52,9 +52,9 @@ Text:
 {text[:4000]}
 """
     response = co.generate(
-        model="command-r",
+        model="command",
         prompt=prompt,
-        max_tokens=800,
+        max_tokens=2000,
         temperature=0.5
     )
     try:
