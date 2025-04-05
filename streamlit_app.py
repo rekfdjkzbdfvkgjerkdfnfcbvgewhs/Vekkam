@@ -10,7 +10,7 @@ import requests
 
 # --- Page Config ---
 st.set_page_config(page_title="KnowMap AI", layout="wide")
-st.title("📘 KnowMap – AI-Powered Interactive Mind Maps & Doubt Solver")
+st.title("Vekkam- the Study Buddy of Your Dreams")
 
 # --- Load API Clients ---
 co = cohere.Client(st.secrets["cohere_api_key"])
@@ -83,7 +83,7 @@ Text:
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=1000,
+        max_tokens=2000,
         temperature=0.5
     )
     try:
@@ -197,7 +197,7 @@ def generate_questions(text):
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=400,
+        max_tokens=2000,
         temperature=0.7
     )
     return response.generations[0].text.strip()
@@ -207,7 +207,7 @@ def generate_summary(text):
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=300,
+        max_tokens=2000,
         temperature=0.5
     )
     return response.generations[0].text.strip()
@@ -247,7 +247,7 @@ Provide a clear, rigorous answer with examples if necessary."""
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=600,
+        max_tokens=2000,
         temperature=0.5
     )
     return response.generations[0].text.strip()
@@ -259,15 +259,15 @@ if uploaded_files:
         st.success(f"✅ Loaded: {file.name}")
         combined_text += extract_text(file) + "\n"
     
-    with st.spinner("🧠 Generating concept map using Cohere..."):
+    with st.spinner("Reading Material..."):
         concept_json = get_concept_map(combined_text)
     
     if concept_json:
         # Build igraph graph from the concept JSON
         g = build_igraph_graph(concept_json)
-        with st.spinner("🖼️ Computing interactive layout..."):
+        with st.spinner("Generating layout..."):
             fig = plot_igraph_graph(g)
-        st.subheader("🌐 Interactive Mind Map (igraph + Plotly)")
+        st.subheader("Interactive Mind Map")
         st.plotly_chart(fig, use_container_width=True)
         
         with st.expander("📌 Concept Map JSON"):
@@ -275,12 +275,12 @@ if uploaded_files:
         
         with st.spinner("📚 Generating summary..."):
             summary = generate_summary(combined_text)
-        st.subheader("📝 Summary")
+        st.subheader("Summary")
         st.markdown(summary)
         
         with st.spinner("🧪 Generating quiz questions..."):
             questions = generate_questions(combined_text)
-        st.subheader("🧠 Quiz Questions")
+        st.subheader("Quiz Questions")
         st.markdown(questions)
 else:
     st.info("Upload documents above to begin.")
