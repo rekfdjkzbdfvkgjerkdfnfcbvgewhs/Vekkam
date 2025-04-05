@@ -82,6 +82,7 @@ Output should be in the following format:
   ]
 }}
 
+Provide concise definitions.
 Touch upon every aspect of the document given.
 Stick to the format and output only the json response
 
@@ -194,7 +195,7 @@ def plot_igraph_graph(g):
     return fig
 
 def generate_questions(text):
-    prompt = f"""Generate 5 educational quiz questions based on this content:\n\n{text[:4000]}"""
+    prompt = f"""Generate 15 educational quiz questions based on this content:\n\n{text[:4000]}"""
     response = co.generate(
         model="command",
         prompt=prompt,
@@ -234,7 +235,7 @@ def search_serp(query):
 
 def answer_doubt(question):
     context = search_serp(question)
-    prompt = f"""You are an expert math tutor. Answer the following question with a detailed explanation and step-by-step math reasoning.
+    prompt = f"""You are an expert tutor. Answer the following question with a detailed explanation and step-by-step math reasoning.
     
 Question: {question}
 
