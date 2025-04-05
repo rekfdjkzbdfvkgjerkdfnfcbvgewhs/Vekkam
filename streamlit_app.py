@@ -3,6 +3,7 @@ import cohere
 import fitz  # PyMuPDF for PDFs
 import docx
 import json
+import re
 from io import StringIO
 import igraph as ig
 import plotly.graph_objects as go
@@ -83,7 +84,8 @@ Output should be in the following format:
     }}
   ]
 }}
-
+Go into detail and cover everything.
+Give only the json code, nothing else.
 Text:
 {text}
 """
@@ -94,8 +96,17 @@ Text:
         temperature=0.5
     )
     try:
-        json_text = response.generations[0].text.strip("`").strip()
-        return json.loads(json_text)
+        # Get the raw text and strip extra characters
+        raw_text = response.generations[0].text.strip("`").strip()
+        # Use regex to extract the JSON block
+        json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
+        if json_match:
+            json_text = json_match.group(1)
+            return json.loads(json_text)
+        else:
+            st.error("❌ Could not extract JSON from the response.")
+            st.code(raw_text)
+            return None
     except Exception as e:
         st.error("❌ Could not parse concept map JSON.")
         st.code(response.generations[0].text)
@@ -110,14 +121,17 @@ def build_igraph_graph(concept_json):
     edges = []
     
     def walk(node, parent_id=None):
+        # Create a unique id for each node using the title and current count
         node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
         description = node.get("description", "No description provided.")
         vertices.append({"id": node_id, "label": node["title"], "description": description})
         if parent_id is not None:
             edges.append((parent_id, node_id))
+        # Process children if present
         for child in node.get("children", []):
             walk(child, node_id)
     
+    # Process the root node: concept_json["topic"] is the main topic.
     root = {
         "title": concept_json["topic"]["title"],
         "description": concept_json["topic"].get("description", "No description provided."),
@@ -125,6 +139,7 @@ def build_igraph_graph(concept_json):
     }
     walk(root)
     
+    # Create the igraph Graph
     g = ig.Graph(directed=True)
     g.add_vertices([v["id"] for v in vertices])
     g.vs["label"] = [v["label"] for v in vertices]
@@ -186,7 +201,7 @@ def plot_igraph_graph(g):
     return fig
 
 def generate_questions(text):
-    prompt = f"""Generate 5 educational quiz questions based on this content:\n\n{text[:4000]}"""
+    prompt = f"""Generate 15 educational quiz questions based on this content:\n\n{text[:4000]}"""
     response = co.generate(
         model="command",
         prompt=prompt,
@@ -250,18 +265,16 @@ if uploaded_files:
     
     # Split full text into chunks
     chunks = chunk_text(combined_text, chunk_size=3500)
-    
+    st.info(f"Processing {len(chunks)} chunks for mind maps...")
+
     # Use ThreadPoolExecutor to run concept map generation for each chunk,
     # along with summary and quiz question generation concurrently.
-    with st.spinner("Hold on, we're going over your material. Go enjoy a YouTube video while we do the work for you!"):
+    with st.spinner("Running all generation tasks concurrently..."):
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Launch tasks for concept maps
             future_maps = [executor.submit(get_concept_map, chunk) for chunk in chunks]
-            # Launch overall summary and quiz questions tasks concurrently
             future_summary = executor.submit(generate_summary, combined_text)
             future_questions = executor.submit(generate_questions, combined_text)
             
-            # Wait for tasks to complete
             concept_maps = [future.result() for future in future_maps]
             summary = future_summary.result()
             quiz_questions = future_questions.result()
@@ -273,8 +286,6 @@ if uploaded_files:
             fig = plot_igraph_graph(g)
             st.subheader(f"Interactive Mind Map - Section {idx+1}")
             st.plotly_chart(fig, use_container_width=True)
-            with st.expander("📌 Concept Map JSON"):
-                st.json(concept_json)
     
     # Display overall summary and quiz questions
     st.subheader("Summary")
