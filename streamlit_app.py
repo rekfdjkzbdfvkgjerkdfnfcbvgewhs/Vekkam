@@ -43,39 +43,39 @@ def extract_text(file):
 
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a concept map in JSON. 
-Each node in the concept map should include a "title" and a "description" summarizing that part of the text.
+Each node in the concept map should include a \"title\" and a \"description\" summarizing that part of the text.
 Output should be in the following format:
 {{
-  "topic": {{
-      "title": "Main Topic",
-      "description": "Description of the main topic."
+  \"topic\": {{
+      \"title\": \"Main Topic\",
+      \"description\": \"Description of the main topic.\"
   }},
-  "subtopics": [
+  \"subtopics\": [
     {{
-      "title": "Subtopic A",
-      "description": "Description for Subtopic A.",
-      "children": [
+      \"title\": \"Subtopic A\",
+      \"description\": \"Description for Subtopic A.\",
+      \"children\": [
          {{
-           "title": "Point A1",
-           "description": "Description for Point A1."
+           \"title\": \"Point A1\",
+           \"description\": \"Description for Point A1.\"
          }},
          {{
-           "title": "Point A2",
-           "description": "Description for Point A2."
+           \"title\": \"Point A2\",
+           \"description\": \"Description for Point A2.\"
          }}
       ]
     }},
     {{
-      "title": "Subtopic B",
-      "description": "Description for Subtopic B.",
-      "children": [
+      \"title\": \"Subtopic B\",
+      \"description\": \"Description for Subtopic B.\",
+      \"children\": [
          {{
-           "title": "Point B1",
-           "description": "Description for Point B1."
+           \"title\": \"Point B1\",
+           \"description\": \"Description for Point B1.\"
          }},
          {{
-           "title": "Point B2",
-           "description": "Description for Point B2."
+           \"title\": \"Point B2\",
+           \"description\": \"Description for Point B2.\"
          }}
       ]
     }}
@@ -110,13 +110,9 @@ Text:
         return None
 
 def build_igraph_graph(concept_json):
-    """
-    Build an igraph Graph from the hierarchical concept JSON.
-    Returns the igraph Graph object.
-    """
     vertices = []
     edges = []
-    
+
     def walk(node, parent_id=None):
         node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
         description = node.get("description", "No description provided.")
@@ -125,14 +121,14 @@ def build_igraph_graph(concept_json):
             edges.append((parent_id, node_id))
         for child in node.get("children", []):
             walk(child, node_id)
-    
+
     root = {
         "title": concept_json["topic"]["title"],
         "description": concept_json["topic"].get("description", "No description provided."),
         "children": concept_json.get("subtopics", [])
     }
     walk(root)
-    
+
     g = ig.Graph(directed=True)
     g.add_vertices([v["id"] for v in vertices])
     g.vs["label"] = [v["label"] for v in vertices]
@@ -142,9 +138,6 @@ def build_igraph_graph(concept_json):
     return g
 
 def plot_igraph_graph(g):
-    """
-    Compute a layout for the graph using igraph and create an interactive Plotly figure.
-    """
     layout = g.layout("fr")
     coords = layout.coords
     edge_x, edge_y = [], []
@@ -235,7 +228,7 @@ def search_serp(query):
 def answer_doubt(question):
     context = search_serp(question)
     prompt = f"""You are an expert math tutor. Answer the following question with a detailed explanation and step-by-step math reasoning.
-    
+
 Question: {question}
 
 Context: {context}
@@ -250,7 +243,6 @@ Provide a clear, rigorous answer with examples if necessary."""
     return response.generations[0].text.strip()
 
 def process_file(file):
-    """Process a single uploaded file and return its name, extracted text, concept map, summary, and quiz questions."""
     text = extract_text(file)
     concept_json = get_concept_map(text)
     summary = generate_summary(text)
@@ -262,7 +254,7 @@ if uploaded_files:
     for file in uploaded_files:
         with st.spinner(f"Processing: {file.name}"):
             filename, text, concept_json, summary, quiz = process_file(file)
-            
+
             st.markdown(f"---\n## Document: {filename}")
             if concept_json:
                 g = build_igraph_graph(concept_json)
@@ -273,7 +265,7 @@ if uploaded_files:
                     st.json(concept_json)
             else:
                 st.error("Concept map generation failed for this document.")
-            
+
             st.subheader("Summary")
             st.markdown(summary)
             st.subheader("Quiz Questions")
