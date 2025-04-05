@@ -255,29 +255,25 @@ def process_file(file):
 
 # --- Main App Logic ---
 if uploaded_files:
-    results = []
-    with st.spinner("Processing uploaded documents..."):
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_file, file) for file in uploaded_files]
-            for future in concurrent.futures.as_completed(futures):
-                results.append(future.result())
-    
-    # Display results for each uploaded file
-    for (filename, text, concept_json, summary, quiz) in results:
-        st.markdown(f"---\n## Document: {filename}")
-        if concept_json:
-            g = build_igraph_graph(concept_json)
-            fig = plot_igraph_graph(g)
-            st.subheader("Interactive Mind Map")
-            st.plotly_chart(fig, use_container_width=True)
-            with st.expander("📌 Concept Map JSON"):
-                st.json(concept_json)
-        else:
-            st.error("Concept map generation failed for this document.")
-        st.subheader("Summary")
-        st.markdown(summary)
-        st.subheader("Quiz Questions")
-        st.markdown(quiz)
+    for file in uploaded_files:
+        with st.spinner(f"Processing: {file.name}"):
+            filename, text, concept_json, summary, quiz = process_file(file)
+            
+            st.markdown(f"---\n## Document: {filename}")
+            if concept_json:
+                g = build_igraph_graph(concept_json)
+                fig = plot_igraph_graph(g)
+                st.subheader("Interactive Mind Map")
+                st.plotly_chart(fig, use_container_width=True)
+                with st.expander("📌 Concept Map JSON"):
+                    st.json(concept_json)
+            else:
+                st.error("Concept map generation failed for this document.")
+            
+            st.subheader("Summary")
+            st.markdown(summary)
+            st.subheader("Quiz Questions")
+            st.markdown(quiz)
 else:
     st.info("Upload documents above to begin.")
 
