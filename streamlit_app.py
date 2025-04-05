@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 import requests
 
 # --- Page Config ---
-st.set_page_config(page_title="KnowMap AI", layout="wide")
+st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam- the Study Buddy of Your Dreams")
 
 # --- Load API Clients ---
