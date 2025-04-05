@@ -74,7 +74,7 @@ Output should be in the following format:
     }}
   ]
 }}
-Give only the json output. 
+Give only the json output. Be as descriptive as possible, touching on every little aspect.
 Text:
 {text[:4000]}
 """
