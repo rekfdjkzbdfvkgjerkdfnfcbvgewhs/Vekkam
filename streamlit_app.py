@@ -270,6 +270,8 @@ if uploaded_files:
     
     mind_maps = []
     for idx, chunk in enumerate(chunks):
+        with st.spinner(f"Processing chunk {idx+1} of {len(chunks)}..."):
+            concept_json = get_concept_map(chunk)
         if concept_json:
             mind_maps.append(concept_json)
             g = build_igraph_graph(concept_json)
