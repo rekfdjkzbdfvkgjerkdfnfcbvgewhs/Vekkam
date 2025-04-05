@@ -54,7 +54,7 @@ Text:
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=2000,
+        max_tokens=800,
         temperature=0.5
     )
     try:
