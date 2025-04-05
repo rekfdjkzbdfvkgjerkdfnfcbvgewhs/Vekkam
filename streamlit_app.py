@@ -8,8 +8,8 @@ import igraph as ig
 import plotly.graph_objects as go
 
 # --- Page Config ---
-st.set_page_config(page_title="KnowMap AI", layout="wide")
-st.title("📘 KnowMap – AI-Powered Interactive Mind Maps (Using igraph)")
+st.set_page_config(page_title="Vekkam", layout="wide")
+st.title("Vekkam: the Study Buddy of your dreams")
 
 # --- Load Cohere ---
 co = cohere.Client(st.secrets["cohere_api_key"])
