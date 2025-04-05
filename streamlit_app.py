@@ -1,4 +1,5 @@
 import streamlit as st
+import cohere
 import fitz  # PyMuPDF for PDFs
 import docx
 import json
@@ -7,13 +8,15 @@ from io import StringIO
 import igraph as ig
 import plotly.graph_objects as go
 import requests
+import concurrent.futures
 
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
 st.text("After the uploaded material is all processed, you can ask your doubts in the panel below.")
 
-# --- Load API Keys ---
+# --- Load API Clients ---
+co = cohere.Client(st.secrets["cohere_api_key"])
 SERP_API_KEY = st.secrets["serp_api_key"]
 
 # --- Upload Files ---
@@ -37,34 +40,6 @@ def extract_text(file):
     elif file.name.endswith(".txt"):
         return StringIO(file.getvalue().decode("utf-8")).read()
     return ""
-
-def call_gemini(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={st.secrets['gemini_api_key']}"
-    headers = {
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ]
-    }
-
-    response = requests.post(url, headers=headers, json=payload)
-
-    if response.status_code == 200:
-        candidates = response.json().get("candidates", [])
-        if candidates:
-            return candidates[0]["content"]["parts"][0]["text"].strip()
-        else:
-            return "No response from Gemini 2.5 Pro."
-    else:
-        st.error(f"Gemini API Error {response.status_code}: {response.text}")
-        return "Error calling Gemini API."
 
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a concept map in JSON. 
@@ -113,102 +88,169 @@ Stick to the format and output only the json response
 Text:
 {text}
 """
-    raw_text = call_gemini(prompt)
+    response = co.generate(
+        model="command",
+        prompt=prompt,
+        max_tokens=2000,
+        temperature=0.5
+    )
     try:
+        raw_text = response.generations[0].text.strip("").strip()
         json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
         if json_match:
-            return json.loads(json_match.group(1))
+            json_text = json_match.group(1)
+            return json.loads(json_text)
         else:
             st.error("❌ Could not extract JSON from the response.")
             st.code(raw_text)
             return None
-    except Exception:
+    except Exception as e:
         st.error("❌ Could not parse concept map JSON.")
-        st.code(raw_text)
+        st.code(response.generations[0].text)
         return None
 
 def build_igraph_graph(concept_json):
-    vertices, edges = [], []
+    """
+    Build an igraph Graph from the hierarchical concept JSON.
+    Returns the igraph Graph object.
+    """
+    vertices = []
+    edges = []
+    
     def walk(node, parent_id=None):
         node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
-        vertices.append({"id": node_id, "label": node["title"], "description": node.get("description", "")})
-        if parent_id:
+        description = node.get("description", "No description provided.")
+        vertices.append({"id": node_id, "label": node["title"], "description": description})
+        if parent_id is not None:
             edges.append((parent_id, node_id))
         for child in node.get("children", []):
             walk(child, node_id)
+    
     root = {
         "title": concept_json["topic"]["title"],
-        "description": concept_json["topic"].get("description", ""),
+        "description": concept_json["topic"].get("description", "No description provided."),
         "children": concept_json.get("subtopics", [])
     }
     walk(root)
+    
     g = ig.Graph(directed=True)
     g.add_vertices([v["id"] for v in vertices])
     g.vs["label"] = [v["label"] for v in vertices]
     g.vs["description"] = [v["description"] for v in vertices]
-    g.add_edges(edges)
+    if edges:
+        g.add_edges(edges)
     return g
 
 def plot_igraph_graph(g):
+    """
+    Compute a layout for the graph using igraph and create an interactive Plotly figure.
+    """
     layout = g.layout("fr")
     coords = layout.coords
     edge_x, edge_y = [], []
     for edge in g.es:
-        x0, y0 = coords[edge.source]
-        x1, y1 = coords[edge.target]
+        src, tgt = edge.tuple
+        x0, y0 = coords[src]
+        x1, y1 = coords[tgt]
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y,
+        line=dict(width=1, color='#888'),
+        hoverinfo='none',
+        mode='lines'
+    )
     node_x, node_y, hover_texts = [], [], []
-    for i, v in enumerate(g.vs):
+    for i, vertex in enumerate(g.vs):
         x, y = coords[i]
         node_x.append(x)
         node_y.append(y)
-        hover_texts.append(f"<b>{v['label']}</b><br>{v['description']}")
+        hover_texts.append(f"<b>{vertex['label']}</b><br>{vertex['description']}")
     node_trace = go.Scatter(
-        x=node_x, y=node_y, mode='markers+text', text=g.vs["label"],
-        textposition="top center", marker=dict(color='#00cc96', size=20, line_width=2),
-        hoverinfo='text', hovertext=hover_texts
+        x=node_x, y=node_y,
+        mode='markers+text',
+        text=[v for v in g.vs["label"]],
+        textposition="top center",
+        marker=dict(
+            showscale=False,
+            color='#00cc96',
+            size=20,
+            line_width=2
+        ),
+        hoverinfo='text',
+        hovertext=hover_texts
     )
-    return go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
-        title=dict(text='<br>Interactive Mind Map', font=dict(size=16)),
-        showlegend=False, hovermode='closest',
-        margin=dict(b=20, l=5, r=5, t=40),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
-    ))
+    fig = go.Figure(
+        data=[edge_trace, node_trace],
+        layout=go.Layout(
+            title=dict(text='<br>Interactive Mind Map', font=dict(size=16)),
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+        )
+    )
+    return fig
 
 def generate_questions(text):
     prompt = f"""Generate 5 educational quiz questions based on this content:\n\n{text[:4000]}"""
-    return call_gemini(prompt, temperature=0.7)
+    response = co.generate(
+        model="command",
+        prompt=prompt,
+        max_tokens=2000,
+        temperature=0.7
+    )
+    return response.generations[0].text.strip()
 
 def generate_summary(text):
     prompt = f"Summarize the following in 5-7 bullet points:\n\n{text[:4000]}"
-    return call_gemini(prompt)
+    response = co.generate(
+        model="command",
+        prompt=prompt,
+        max_tokens=2000,
+        temperature=0.5
+    )
+    return response.generations[0].text.strip()
 
 def search_serp(query):
     params = {
-        "engine": "google", "q": query,
-        "api_key": SERP_API_KEY, "hl": "en", "gl": "us"
+        "engine": "google",
+        "q": query,
+        "api_key": SERP_API_KEY,
+        "hl": "en",
+        "gl": "us"
     }
     res = requests.get("https://serpapi.com/search", params=params)
     if res.status_code == 200:
-        snippets = [r.get("snippet", "") for r in res.json().get("organic_results", [])[:3]]
-        return " ".join([s for s in snippets if s])
+        data = res.json()
+        snippets = []
+        for result in data.get("organic_results", [])[:3]:
+            snippet = result.get("snippet", "")
+            if snippet:
+                snippets.append(snippet)
+        return " ".join(snippets)
     return ""
 
 def answer_doubt(question):
     context = search_serp(question)
     prompt = f"""You are an expert math tutor. Answer the following question with a detailed explanation and step-by-step math reasoning.
-
+    
 Question: {question}
 
 Context: {context}
 
 Provide a clear, rigorous answer with examples if necessary."""
-    return call_gemini(prompt)
+    response = co.generate(
+        model="command",
+        prompt=prompt,
+        max_tokens=2000,
+        temperature=0.5
+    )
+    return response.generations[0].text.strip()
 
 def process_file(file):
+    """Process a single uploaded file and return its name, extracted text, concept map, summary, and quiz questions."""
     text = extract_text(file)
     concept_json = get_concept_map(text)
     summary = generate_summary(text)
@@ -220,7 +262,7 @@ if uploaded_files:
     for file in uploaded_files:
         with st.spinner(f"Processing: {file.name}"):
             filename, text, concept_json, summary, quiz = process_file(file)
-
+            
             st.markdown(f"---\n## Document: {filename}")
             if concept_json:
                 g = build_igraph_graph(concept_json)
@@ -231,7 +273,7 @@ if uploaded_files:
                     st.json(concept_json)
             else:
                 st.error("Concept map generation failed for this document.")
-
+            
             st.subheader("Summary")
             st.markdown(summary)
             st.subheader("Quiz Questions")
