@@ -13,6 +13,7 @@ import concurrent.futures
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
+st.text("After the uploaded material is all processed, you can ask your doubts in the panel below.")
 
 # --- Load API Clients ---
 co = cohere.Client(st.secrets["cohere_api_key"])
