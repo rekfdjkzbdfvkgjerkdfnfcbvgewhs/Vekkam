@@ -3,3 +3,4 @@ cohere>=4.0.0
 igraph
 PyMuPDF>=1.18.0
 python-docx>=0.8.11
+plotly
