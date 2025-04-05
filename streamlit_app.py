@@ -265,8 +265,6 @@ if uploaded_files:
     
     # Split full text into chunks
     chunks = chunk_text(combined_text, chunk_size=3500)
-    st.info(f"Processing {len(chunks)} chunks for mind maps...")
-
     # Use ThreadPoolExecutor to run concept map generation for each chunk,
     # along with summary and quiz question generation concurrently.
     with st.spinner("Running all generation tasks concurrently..."):
