@@ -82,7 +82,7 @@ Output should be in the following format:
     }}
   ]
 }}
-
+Output only the json code, nothing else.
 Text:
 {text}
 """
