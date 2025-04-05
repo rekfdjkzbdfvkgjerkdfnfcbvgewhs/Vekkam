@@ -15,7 +15,9 @@ st.title("📘 KnowMap – AI-Powered Interactive Mind Maps (Using igraph)")
 co = cohere.Client(st.secrets["cohere_api_key"])
 
 # --- Upload Files ---
-uploaded_files = st.file_uploader("Upload documents (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Upload documents (PDF, DOCX, TXT)", 
+                                  type=["pdf", "docx", "txt"], 
+                                  accept_multiple_files=True)
 
 # --- Helper Functions ---
 def extract_text(file):
@@ -33,17 +35,42 @@ def extract_text(file):
     return ""
 
 def get_concept_map(text):
-    prompt = f"""You are an AI that converts text into a concept map in JSON. Output should be like:
+    prompt = f"""You are an AI that converts text into a concept map in JSON. 
+Each node in the concept map should include a "title" and a "description" summarizing that part of the text.
+Output should be in the following format:
 {{
-  "topic": "Main Topic",
+  "topic": {{
+      "title": "Main Topic",
+      "description": "Description of the main topic."
+  }},
   "subtopics": [
     {{
       "title": "Subtopic A",
-      "children": [{{"title": "Point A1"}}, {{"title": "Point A2"}}]
+      "description": "Description for Subtopic A.",
+      "children": [
+         {{
+           "title": "Point A1",
+           "description": "Description for Point A1."
+         }},
+         {{
+           "title": "Point A2",
+           "description": "Description for Point A2."
+         }}
+      ]
     }},
     {{
       "title": "Subtopic B",
-      "children": [{{"title": "Point B1"}}, {{"title": "Point B2"}}]
+      "description": "Description for Subtopic B.",
+      "children": [
+         {{
+           "title": "Point B1",
+           "description": "Description for Point B1."
+         }},
+         {{
+           "title": "Point B2",
+           "description": "Description for Point B2."
+         }}
+      ]
     }}
   ]
 }}
@@ -54,7 +81,7 @@ Text:
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=800,
+        max_tokens=1000,
         temperature=0.5
     )
     try:
@@ -68,28 +95,35 @@ Text:
 def build_igraph_graph(concept_json):
     """
     Build an igraph Graph from the hierarchical concept JSON.
-    Returns the igraph Graph object.
+    Returns the igraph Graph object and a list of vertex data.
     """
     vertices = []
     edges = []
     
     def walk(node, parent_id=None):
-        # Create a unique id for each node (using the title and current length)
+        # Create a unique id for each node using the title and current count
         node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
-        vertices.append({"id": node_id, "label": node["title"]})
+        description = node.get("description", "No description provided.")
+        vertices.append({"id": node_id, "label": node["title"], "description": description})
         if parent_id is not None:
             edges.append((parent_id, node_id))
+        # If the node has children, process them
         for child in node.get("children", []):
             walk(child, node_id)
     
-    # Root node from the top-level "topic" and its children (from "subtopics")
-    root = {"title": concept_json["topic"], "children": concept_json["subtopics"]}
+    # Process the root node: concept_json["topic"] is the main topic.
+    root = {
+        "title": concept_json["topic"]["title"],
+        "description": concept_json["topic"].get("description", "No description provided."),
+        "children": concept_json.get("subtopics", [])
+    }
     walk(root)
     
     # Create the igraph Graph
     g = ig.Graph(directed=True)
     g.add_vertices([v["id"] for v in vertices])
     g.vs["label"] = [v["label"] for v in vertices]
+    g.vs["description"] = [v["description"] for v in vertices]
     if edges:
         g.add_edges(edges)
     return g
@@ -118,20 +152,21 @@ def plot_igraph_graph(g):
         mode='lines'
     )
     
-    # Build node traces
+    # Build node traces with hover text showing title and description
     node_x = []
     node_y = []
-    node_text = []
+    hover_texts = []
     for i, vertex in enumerate(g.vs):
         x, y = coords[i]
         node_x.append(x)
         node_y.append(y)
-        node_text.append(vertex["label"])
+        # Combine title and description for hover info
+        hover_texts.append(f"<b>{vertex['label']}</b><br>{vertex['description']}")
     
     node_trace = go.Scatter(
         x=node_x, y=node_y,
         mode='markers+text',
-        text=node_text,
+        text=[v for v in g.vs["label"]],
         textposition="top center",
         marker=dict(
             showscale=False,
@@ -139,7 +174,8 @@ def plot_igraph_graph(g):
             size=20,
             line_width=2
         ),
-        hoverinfo='text'
+        hoverinfo='text',
+        hovertext=hover_texts
     )
     
     fig = go.Figure(
