@@ -17,9 +17,11 @@ co = cohere.Client(st.secrets["cohere_api_key"])
 SERP_API_KEY = st.secrets["serp_api_key"]
 
 # --- Upload Files ---
-uploaded_files = st.file_uploader("Upload documents (PDF, DOCX, TXT)", 
-                                  type=["pdf", "docx", "txt"], 
-                                  accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    "Upload documents (PDF, DOCX, TXT)",
+    type=["pdf", "docx", "txt"],
+    accept_multiple_files=True
+)
 
 # --- Helper Functions ---
 def extract_text(file):
@@ -35,6 +37,10 @@ def extract_text(file):
     elif file.name.endswith(".txt"):
         return StringIO(file.getvalue().decode("utf-8")).read()
     return ""
+
+def chunk_text(text, chunk_size=3500):
+    """Split text into chunks of up to chunk_size characters."""
+    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
 
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a concept map in JSON. 
@@ -78,7 +84,7 @@ Output should be in the following format:
 }}
 
 Text:
-{text[:4000]}
+{text}
 """
     response = co.generate(
         model="command",
@@ -259,29 +265,33 @@ if uploaded_files:
         st.success(f"✅ Loaded: {file.name}")
         combined_text += extract_text(file) + "\n"
     
-    with st.spinner("Reading Material..."):
-        concept_json = get_concept_map(combined_text)
+    # Split the full text into manageable chunks for concept mapping
+    chunks = chunk_text(combined_text, chunk_size=3500)
+    st.info(f"Processing {len(chunks)} chunks of text for mind maps...")
     
-    if concept_json:
-        # Build igraph graph from the concept JSON
-        g = build_igraph_graph(concept_json)
-        with st.spinner("Generating layout..."):
+    mind_maps = []
+    for idx, chunk in enumerate(chunks):
+        with st.spinner(f"Processing chunk {idx+1} of {len(chunks)}..."):
+            concept_json = get_concept_map(chunk)
+        if concept_json:
+            mind_maps.append(concept_json)
+            g = build_igraph_graph(concept_json)
             fig = plot_igraph_graph(g)
-        st.subheader("Interactive Mind Map")
-        st.plotly_chart(fig, use_container_width=True)
-        
-        with st.expander("📌 Concept Map JSON"):
-            st.json(concept_json)
-        
-        with st.spinner("📚 Generating summary..."):
-            summary = generate_summary(combined_text)
-        st.subheader("Summary")
-        st.markdown(summary)
-        
-        with st.spinner("🧪 Generating quiz questions..."):
-            questions = generate_questions(combined_text)
-        st.subheader("Quiz Questions")
-        st.markdown(questions)
+            st.subheader(f"Interactive Mind Map - Section {idx+1}")
+            st.plotly_chart(fig, use_container_width=True)
+            with st.expander("📌 Concept Map JSON"):
+                st.json(concept_json)
+    
+    # Generate overall summary and quiz questions based on the full text
+    with st.spinner("📚 Generating summary..."):
+        summary = generate_summary(combined_text)
+    st.subheader("Summary")
+    st.markdown(summary)
+    
+    with st.spinner("🧪 Generating quiz questions..."):
+        questions = generate_questions(combined_text)
+    st.subheader("Quiz Questions")
+    st.markdown(questions)
 else:
     st.info("Upload documents above to begin.")
 
