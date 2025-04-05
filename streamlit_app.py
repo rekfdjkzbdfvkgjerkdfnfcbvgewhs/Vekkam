@@ -8,12 +8,11 @@ from io import StringIO
 import igraph as ig
 import plotly.graph_objects as go
 import requests
-import concurrent.futures
 
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
-st.text("After the uploaded material is all processed, you can ask your doubts in the panel below.")
+st.caption("Upload materials to generate a concept map, summary, and quiz. Ask your doubts below!")
 
 # --- Load API Clients ---
 co = cohere.Client(st.secrets["cohere_api_key"])
@@ -21,110 +20,96 @@ SERP_API_KEY = st.secrets["serp_api_key"]
 
 # --- Upload Files ---
 uploaded_files = st.file_uploader(
-    "Upload documents (PDF, DOCX, TXT)",
+    "📤 Upload documents (PDF, DOCX, TXT)",
     type=["pdf", "docx", "txt"],
     accept_multiple_files=True
 )
 
-# --- Helper Functions ---
+# --- Text Extraction ---
 def extract_text(file):
     if file.name.endswith(".pdf"):
-        text = ""
         with fitz.open(stream=file.read(), filetype="pdf") as doc:
-            for page in doc:
-                text += page.get_text()
-        return text
+            return "".join([page.get_text() for page in doc])
     elif file.name.endswith(".docx"):
         doc_obj = docx.Document(file)
-        return "\n".join([p.text for p in doc_obj.paragraphs])
+        return "\n".join(p.text for p in doc_obj.paragraphs)
     elif file.name.endswith(".txt"):
         return StringIO(file.getvalue().decode("utf-8")).read()
     return ""
 
+# --- Cohere Prompt Functions ---
+def cohere_generate(prompt, temperature=0.5):
+    return co.generate(
+        model="command",
+        prompt=prompt,
+        max_tokens=2000,
+        temperature=temperature
+    ).generations[0].text.strip()
+
 def get_concept_map(text):
-    prompt = f"""You are an AI that converts text into a concept map in JSON. 
-Each node in the concept map should include a \"title\" and a \"description\" summarizing that part of the text.
-Output should be in the following format:
+    prompt = f"""
+You are an AI that converts text into a concept map in JSON format.
+Each node should include a "title" and a "description".
+
+Format:
 {{
-  \"topic\": {{
-      \"title\": \"Main Topic\",
-      \"description\": \"Description of the main topic.\"
+  "topic": {{
+    "title": "Main Topic",
+    "description": "Description of the main topic."
   }},
-  \"subtopics\": [
+  "subtopics": [
     {{
-      \"title\": \"Subtopic A\",
-      \"description\": \"Description for Subtopic A.\",
-      \"children\": [
-         {{
-           \"title\": \"Point A1\",
-           \"description\": \"Description for Point A1.\"
-         }},
-         {{
-           \"title\": \"Point A2\",
-           \"description\": \"Description for Point A2.\"
-         }}
-      ]
-    }},
-    {{
-      \"title\": \"Subtopic B\",
-      \"description\": \"Description for Subtopic B.\",
-      \"children\": [
-         {{
-           \"title\": \"Point B1\",
-           \"description\": \"Description for Point B1.\"
-         }},
-         {{
-           \"title\": \"Point B2\",
-           \"description\": \"Description for Point B2.\"
-         }}
+      "title": "Subtopic A",
+      "description": "Description for Subtopic A.",
+      "children": [
+        {{
+          "title": "Point A1",
+          "description": "Description for Point A1."
+        }}
       ]
     }}
   ]
 }}
 
-Touch upon every aspect of the document given.
-Stick to the format and output only the json response
-
 Text:
 {text}
 """
-    response = co.generate(
-        model="command",
-        prompt=prompt,
-        max_tokens=2000,
-        temperature=0.5
-    )
     try:
-        raw_text = response.generations[0].text.strip("`").strip()
-        json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
-        if json_match:
-            json_text = json_match.group(1)
-            return json.loads(json_text)
-        else:
-            st.error("❌ Could not extract JSON from the response.")
-            st.code(raw_text)
-            return None
+        raw_output = cohere_generate(prompt)
+        match = re.search(r'\{.*\}', raw_output, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+        st.error("❌ Could not extract valid JSON.")
+        st.code(raw_output)
     except Exception as e:
-        st.error("❌ Could not parse concept map JSON.")
-        st.code(response.generations[0].text)
-        return None
+        st.error("❌ Failed to parse concept map.")
+    return None
 
+def generate_summary(text):
+    return cohere_generate(f"Summarize this in 5-7 bullet points:\n\n{text[:4000]}")
+
+def generate_questions(text):
+    return cohere_generate(f"Generate 5 educational quiz questions based on this content:\n\n{text[:4000]}", temperature=0.7)
+
+# --- Concept Map Visualization ---
 def build_igraph_graph(concept_json):
-    vertices = []
-    edges = []
+    vertices, edges = [], []
 
     def walk(node, parent_id=None):
         node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
-        description = node.get("description", "No description provided.")
-        vertices.append({"id": node_id, "label": node["title"], "description": description})
-        if parent_id is not None:
+        vertices.append({
+            "id": node_id,
+            "label": node["title"],
+            "description": node.get("description", "No description.")
+        })
+        if parent_id:
             edges.append((parent_id, node_id))
         for child in node.get("children", []):
             walk(child, node_id)
 
     root = {
         "title": concept_json["topic"]["title"],
-        "description": concept_json["topic"].get("description", "No description provided."),
+        "description": concept_json["topic"]["description"],
         "children": concept_json.get("subtopics", [])
     }
     walk(root)
@@ -133,152 +118,109 @@ def build_igraph_graph(concept_json):
     g.add_vertices([v["id"] for v in vertices])
     g.vs["label"] = [v["label"] for v in vertices]
     g.vs["description"] = [v["description"] for v in vertices]
-    if edges:
-        g.add_edges(edges)
+    g.add_edges(edges)
     return g
 
 def plot_igraph_graph(g):
     layout = g.layout("fr")
     coords = layout.coords
+
     edge_x, edge_y = [], []
-    for edge in g.es:
-        src, tgt = edge.tuple
+    for src, tgt in g.get_edgelist():
         x0, y0 = coords[src]
         x1, y1 = coords[tgt]
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
-    edge_trace = go.Scatter(
-        x=edge_x, y=edge_y,
-        line=dict(width=1, color='#888'),
-        hoverinfo='none',
-        mode='lines'
-    )
+
     node_x, node_y, hover_texts = [], [], []
-    for i, vertex in enumerate(g.vs):
+    for i, v in enumerate(g.vs):
         x, y = coords[i]
         node_x.append(x)
         node_y.append(y)
-        hover_texts.append(f"<b>{vertex['label']}</b><br>{vertex['description']}")
-    node_trace = go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers+text',
-        text=[v for v in g.vs["label"]],
-        textposition="top center",
-        marker=dict(
-            showscale=False,
-            color='#00cc96',
-            size=20,
-            line_width=2
-        ),
-        hoverinfo='text',
-        hovertext=hover_texts
-    )
-    fig = go.Figure(
-        data=[edge_trace, node_trace],
-        layout=go.Layout(
-            title=dict(text='<br>Interactive Mind Map', font=dict(size=16)),
-            showlegend=False,
-            hovermode='closest',
-            margin=dict(b=20, l=5, r=5, t=40),
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
-        )
-    )
+        hover_texts.append(f"<b>{v['label']}</b><br>{v['description']}")
+
+    fig = go.Figure(data=[
+        go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none'),
+        go.Scatter(x=node_x, y=node_y, mode='markers+text', text=g.vs["label"],
+                   textposition="top center", hovertext=hover_texts, hoverinfo='text',
+                   marker=dict(color='#00cc96', size=20, line_width=2))
+    ], layout=go.Layout(
+        title=dict(text='Interactive Mind Map', font=dict(size=16)),
+        hovermode='closest',
+        margin=dict(b=20, l=5, r=5, t=40),
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+    ))
+
     return fig
 
-def generate_questions(text):
-    prompt = f"""Generate 5 educational quiz questions based on this content:\n\n{text[:4000]}"""
-    response = co.generate(
-        model="command",
-        prompt=prompt,
-        max_tokens=2000,
-        temperature=0.7
-    )
-    return response.generations[0].text.strip()
-
-def generate_summary(text):
-    prompt = f"Summarize the following in 5-7 bullet points:\n\n{text[:4000]}"
-    response = co.generate(
-        model="command",
-        prompt=prompt,
-        max_tokens=2000,
-        temperature=0.5
-    )
-    return response.generations[0].text.strip()
-
+# --- Doubt Solving ---
 def search_serp(query):
-    params = {
+    res = requests.get("https://serpapi.com/search", params={
         "engine": "google",
         "q": query,
         "api_key": SERP_API_KEY,
         "hl": "en",
         "gl": "us"
-    }
-    res = requests.get("https://serpapi.com/search", params=params)
-    if res.status_code == 200:
-        data = res.json()
-        snippets = []
-        for result in data.get("organic_results", [])[:3]:
-            snippet = result.get("snippet", "")
-            if snippet:
-                snippets.append(snippet)
-        return " ".join(snippets)
+    })
+    if res.ok:
+        return " ".join(result.get("snippet", "") for result in res.json().get("organic_results", [])[:3])
     return ""
 
 def answer_doubt(question):
     context = search_serp(question)
-    prompt = f"""You are an expert math tutor. Answer the following question with a detailed explanation and step-by-step math reasoning.
+    prompt = f"""
+You are a math tutor. Explain the answer to this question step-by-step.
 
 Question: {question}
-
 Context: {context}
 
-Provide a clear, rigorous answer with examples if necessary."""
-    response = co.generate(
-        model="command",
-        prompt=prompt,
-        max_tokens=2000,
-        temperature=0.5
-    )
-    return response.generations[0].text.strip()
+Give a clear and rigorous answer with examples.
+"""
+    return cohere_generate(prompt)
 
+# --- Main Processing ---
 def process_file(file):
     text = extract_text(file)
-    concept_json = get_concept_map(text)
-    summary = generate_summary(text)
-    quiz = generate_questions(text)
-    return file.name, text, concept_json, summary, quiz
+    return {
+        "filename": file.name,
+        "text": text,
+        "concept_map": get_concept_map(text),
+        "summary": generate_summary(text),
+        "quiz": generate_questions(text)
+    }
 
-# --- Main App Logic ---
+# --- Display Results ---
 if uploaded_files:
     for file in uploaded_files:
-        with st.spinner(f"Processing: {file.name}"):
-            filename, text, concept_json, summary, quiz = process_file(file)
+        with st.spinner(f"🔍 Processing: {file.name}"):
+            result = process_file(file)
+            st.markdown(f"---\n## 📄 Document: {result['filename']}")
 
-            st.markdown(f"---\n## Document: {filename}")
-            if concept_json:
-                g = build_igraph_graph(concept_json)
-                fig = plot_igraph_graph(g)
-                st.subheader("Interactive Mind Map")
+            if result["concept_map"]:
+                graph = build_igraph_graph(result["concept_map"])
+                fig = plot_igraph_graph(graph)
+                st.subheader("🧠 Concept Map")
                 st.plotly_chart(fig, use_container_width=True)
-                with st.expander("📌 Concept Map JSON"):
-                    st.json(concept_json)
+                with st.expander("📌 Raw JSON"):
+                    st.json(result["concept_map"])
             else:
-                st.error("Concept map generation failed for this document.")
+                st.error("❌ Concept map generation failed.")
 
-            st.subheader("Summary")
-            st.markdown(summary)
-            st.subheader("Quiz Questions")
-            st.markdown(quiz)
+            st.subheader("📝 Summary")
+            st.markdown(result["summary"])
+
+            st.subheader("🧪 Quiz Questions")
+            st.markdown(result["quiz"])
 else:
-    st.info("Upload documents above to begin.")
+    st.info("📂 Upload documents above to get started.")
 
-# --- Doubt Solver Section ---
+# --- Doubt Section ---
 st.markdown("---")
 st.header("❓ Ask a Doubt")
-question = st.text_input("Enter your math or learning question here:")
-if st.button("Get Answer") and question:
-    with st.spinner("🔍 Searching for context and generating answer..."):
+question = st.text_input("💬 Enter your math or learning question here:")
+if st.button("🧠 Get Answer") and question:
+    with st.spinner("🔍 Getting your answer..."):
         answer = answer_doubt(question)
-    st.subheader("Answer")
+    st.subheader("📘 Answer")
     st.markdown(answer)
