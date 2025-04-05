@@ -39,27 +39,32 @@ def extract_text(file):
     return ""
 
 def call_gemini(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={st.secrets['gemini_api_key']}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {
         "Content-Type": "application/json"
     }
-    data = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ]
     }
-    response = requests.post(url, headers=headers, json=data)
+
+    response = requests.post(url, headers=headers, json=payload)
+
     if response.status_code == 200:
         candidates = response.json().get("candidates", [])
         if candidates:
             return candidates[0]["content"]["parts"][0]["text"].strip()
         else:
-            st.error("No response from Gemini.")
-            return ""
+            return "No response from Gemini 2.5 Pro."
     else:
-        st.error(f"Gemini API error: {response.status_code}")
-        st.code(response.text)
-        return ""
+        st.error(f"Gemini API Error {response.status_code}: {response.text}")
+        return "Error calling Gemini API."
 
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a concept map in JSON. 
