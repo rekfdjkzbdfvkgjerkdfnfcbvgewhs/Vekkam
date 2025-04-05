@@ -82,6 +82,7 @@ Output should be in the following format:
   ]
 }}
 
+Touch upon every aspect of the document given.
 Stick to the format and output only the json response
 
 Text:
