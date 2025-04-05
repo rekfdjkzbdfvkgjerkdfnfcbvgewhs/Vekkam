@@ -82,6 +82,8 @@ Output should be in the following format:
   ]
 }}
 
+Stick to the format and output only the json response
+
 Text:
 {text}
 """
