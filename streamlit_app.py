@@ -52,9 +52,9 @@ Text:
 {text[:4000]}
 """
     response = co.generate(
-        model="command",
+        model="command-r",
         prompt=prompt,
-        max_tokens=2000,
+        max_tokens=800,
         temperature=0.5
     )
     try:
@@ -142,16 +142,17 @@ def plot_igraph_graph(g):
         hoverinfo='text'
     )
     
-    fig = go.Figure(data=[edge_trace, node_trace],
-                    layout=go.Layout(
-                        title='<br>Interactive Mind Map',
-                        titlefont_size=16,
-                        showlegend=False,
-                        hovermode='closest',
-                        margin=dict(b=20,l=5,r=5,t=40),
-                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
-                    ))
+    fig = go.Figure(
+        data=[edge_trace, node_trace],
+        layout=go.Layout(
+            title=dict(text='<br>Interactive Mind Map', font=dict(size=16)),
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+        )
+    )
     return fig
 
 def generate_questions(text):
@@ -167,7 +168,7 @@ def generate_questions(text):
 def generate_summary(text):
     prompt = f"Summarize the following in 5-7 bullet points:\n\n{text[:4000]}"
     response = co.generate(
-        model="command-r",
+        model="command",
         prompt=prompt,
         max_tokens=300,
         temperature=0.5
