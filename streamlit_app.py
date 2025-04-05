@@ -215,7 +215,6 @@ def generate_summary(text):
 if uploaded_files:
     combined_text = ""
     for file in uploaded_files:
-        st.success(f"✅ Loaded: {file.name}")
         combined_text += extract_text(file) + "\n"
     
     with st.spinner("🧠 Generating concept map using Cohere..."):
@@ -226,11 +225,8 @@ if uploaded_files:
         g = build_igraph_graph(concept_json)
         with st.spinner("🖼️ Computing interactive layout..."):
             fig = plot_igraph_graph(g)
-        st.subheader("🌐 Interactive Mind Map (igraph + Plotly)")
+        st.subheader("🌐 Interactive Mind Map")
         st.plotly_chart(fig, use_container_width=True)
-        
-        with st.expander("📌 Concept Map JSON"):
-            st.json(concept_json)
         
         with st.spinner("📚 Generating summary..."):
             summary = generate_summary(combined_text)
