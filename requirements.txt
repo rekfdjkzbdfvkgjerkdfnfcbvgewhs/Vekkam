@@ -1,0 +1,5 @@
+streamlit>=1.0.0
+cohere>=4.0.0
+streamlit-cytoscapejs>=0.1.0
+PyMuPDF>=1.18.0
+python-docx>=0.8.11
