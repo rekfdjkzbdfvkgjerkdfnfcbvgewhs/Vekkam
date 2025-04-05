@@ -158,7 +158,7 @@ def plot_igraph_graph(g):
 def generate_questions(text):
     prompt = f"""Generate 5 educational quiz questions based on this content:\n\n{text[:4000]}"""
     response = co.generate(
-        model="command-r",
+        model="command",
         prompt=prompt,
         max_tokens=400,
         temperature=0.7
@@ -168,7 +168,7 @@ def generate_questions(text):
 def generate_summary(text):
     prompt = f"Summarize the following in 5-7 bullet points:\n\n{text[:4000]}"
     response = co.generate(
-        model="command-r",
+        model="command",
         prompt=prompt,
         max_tokens=300,
         temperature=0.5
