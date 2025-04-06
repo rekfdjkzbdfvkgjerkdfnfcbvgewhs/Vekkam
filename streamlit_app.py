@@ -272,14 +272,29 @@ Ensure the LaTeX code renders correctly in Streamlit."""
 def display_answer(answer):
     """
     Displays the answer from answer_doubt.
-    If a LaTeX matrix is detected, it will render it using st.latex.
+    If the answer is valid JSON, display it using st.json.
+    If it contains HTML markup, render it using st.markdown with unsafe_allow_html=True.
+    If a LaTeX matrix is detected, render it using st.latex.
+    Otherwise, display the answer as Markdown.
     """
-    # Detect LaTeX matrix code in the answer (this is a simplistic regex check)
+    # Check if the answer is valid JSON
+    try:
+        parsed_json = json.loads(answer)
+        st.json(parsed_json)
+        return
+    except json.JSONDecodeError:
+        pass
+
+    # Check for HTML tags in the answer
+    if re.search(r'<[^>]+>', answer):
+        st.markdown(answer, unsafe_allow_html=True)
+        return
+
+    # Check for LaTeX matrix code
     matrix_pattern = re.compile(r"(\\left\(.*?\\right\))", re.DOTALL)
     matrix_match = matrix_pattern.search(answer)
     if matrix_match:
         matrix_code = matrix_match.group(1)
-        # Remove the matrix code from the text to avoid duplication in markdown
         answer_text = answer.replace(matrix_code, "")
         st.markdown(answer_text)
         st.latex(matrix_code)
