@@ -82,7 +82,7 @@ Follow exactly this structure:
     }}
   ]
 }}
-Make the mind map as detailed as possible in terms of scope but keep the definitions concise. They're for an exam.
+Make the mind map as detailed as possible in terms of scope but keep the definitions concise. They're for an exam. Keep more branches and short definitons.
 Text:
 {text}
 """
