@@ -1,6 +1,6 @@
 import streamlit as st
 import cohere
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF for PDFs
 import docx
 import json
 import re
@@ -10,11 +10,12 @@ import pytesseract
 import plotly.graph_objects as go
 import igraph as ig
 import requests
-from pptx import Presentation  # For .pptx support
+from pptx import Presentation  # For PPTX support
 
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
+st.text("After the uploaded material is processed, review summaries, flashcards, and mnemonics below.")
 
 # --- Load API Clients ---
 co = cohere.Client(st.secrets["cohere_api_key"])
@@ -82,7 +83,7 @@ Follow exactly this structure:
     }}
   ]
 }}
-Output only the json response, with concise definitions and as much detail as possible. I need as much content as I can get for an exam I got coming up on this content.
+
 Text:
 {text}
 """
@@ -92,29 +93,20 @@ Text:
         max_tokens=2000,
         temperature=0.5
     )
-
     raw_output = response.generations[0].text.strip()
 
-    # Attempt to extract JSON-like content
     try:
         match = re.search(r'\{.*\}', raw_output, re.DOTALL)
         if not match:
             raise ValueError("No JSON-like content found.")
-
         json_str = match.group(0)
-
-        # Fix common formatting issues
-        json_str = re.sub(r",\s*}", "}", json_str)  # trailing commas before }
-        json_str = re.sub(r",\s*]", "]", json_str)  # trailing commas before ]
-        json_str = re.sub(r'“|”', '"', json_str)    # smart quotes to normal quotes
-
+        json_str = re.sub(r",\s*}", "}", json_str)  # Remove trailing commas
+        json_str = re.sub(r",\s*]", "]", json_str)
+        json_str = re.sub(r'“|”', '"', json_str)    # Replace smart quotes
         data = json.loads(json_str)
-
         if "topic" not in data or "title" not in data["topic"]:
             raise ValueError("Missing 'topic' in concept map.")
-
         return data
-
     except Exception as e:
         st.error(f"Concept map generation failed: {e}")
         st.code(raw_output)
@@ -140,12 +132,12 @@ def build_igraph_graph(concept_json):
         "children": concept_json.get("subtopics", [])
     }
     walk(root)
-
     g = ig.Graph(directed=True)
     g.add_vertices([v["id"] for v in vertices])
     g.vs["label"] = [v["label"] for v in vertices]
     g.vs["description"] = [v["description"] for v in vertices]
-    g.add_edges(edges)
+    if edges:
+        g.add_edges(edges)
     return g
 
 def plot_igraph_graph(g):
@@ -157,7 +149,8 @@ def plot_igraph_graph(g):
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
 
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines',
+                            line=dict(width=1, color='#888'), hoverinfo='none')
 
     node_x, node_y, texts = [], [], []
     for i, v in enumerate(g.vs):
@@ -178,7 +171,8 @@ def plot_igraph_graph(g):
                                       xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                                       yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
 
-# --- Other Features ---
+# --- Additional Note-Taking Features ---
+
 def generate_summary(text):
     prompt = f"Summarize this in 5-7 bullet points:\n\n{text[:4000]}"
     return co.generate(model="command", prompt=prompt, max_tokens=1000).generations[0].text.strip()
@@ -187,25 +181,126 @@ def generate_questions(text):
     prompt = f"Generate 15 educational quiz questions from the following text:\n\n{text[:4000]}"
     return co.generate(model="command", prompt=prompt, max_tokens=1000).generations[0].text.strip()
 
-# --- Main Logic ---
+def generate_flashcards(text):
+    prompt = f"""Create 10 flashcards from the following content.
+Each flashcard should have a "question" and an "answer".
+Text:
+{text[:4000]}
+"""
+    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
+
+def generate_mnemonics(text):
+    prompt = f"""Based on the following text, generate 5 mnemonics to help remember the key points.
+Text:
+{text[:4000]}
+"""
+    return co.generate(model="command", prompt=prompt, max_tokens=1000, temperature=0.7).generations[0].text.strip()
+
+def generate_key_terms(text):
+    prompt = f"""Extract 10 key terms from the following text along with a brief definition for each.
+Text:
+{text[:4000]}
+"""
+    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
+
+# --- Process Each File ---
+def process_file(file):
+    text = extract_text(file)
+    concept_json = get_concept_map(text)
+    summary = generate_summary(text)
+    questions = generate_questions(text)
+    flashcards = generate_flashcards(text)
+    mnemonics = generate_mnemonics(text)
+    key_terms = generate_key_terms(text)
+    return file.name, text, concept_json, summary, questions, flashcards, mnemonics, key_terms
+
+# --- Main App Logic ---
 if uploaded_files:
     for file in uploaded_files:
         with st.spinner(f"Processing: {file.name}"):
-            text = extract_text(file)
-            concept_json = get_concept_map(text)
-            summary = generate_summary(text)
-            questions = generate_questions(text)
+            name, text, concept_json, summary, questions, flashcards, mnemonics, key_terms = process_file(file)
+            st.markdown(f"---\n## Document: {name}")
 
-            st.markdown(f"---\n## Document: {file.name}")
-
+            # Display Concept Map & Mind Map
             if concept_json:
                 g = build_igraph_graph(concept_json)
                 fig = plot_igraph_graph(g)
                 st.subheader("🧠 Interactive Mind Map")
                 st.plotly_chart(fig, use_container_width=True)
+                with st.expander("🧾 Concept Map JSON"):
+                    st.json(concept_json)
+            else:
+                st.error("Concept map generation failed.")
 
+            # Display Summary and Quiz Questions
             st.subheader("📌 Summary")
             st.markdown(summary)
-
             st.subheader("📝 Quiz Questions")
             st.markdown(questions)
+
+            # --- New Memory Aids Section ---
+            st.subheader("📚 Memory Aids & Note-Taking")
+            with st.expander("Flashcards"):
+                st.markdown(flashcards)
+            with st.expander("Mnemonics"):
+                st.markdown(mnemonics)
+            with st.expander("Key Terms"):
+                st.markdown(key_terms)
+else:
+    st.info("Upload documents above to begin.")
+
+# --- Doubt Solver Section ---
+st.markdown("---")
+st.header("❓ Ask a Doubt")
+
+doubt_mode = st.radio("How would you like to provide your doubt?", 
+                      ["Type Doubt", "Upload Doubt"])
+doubt_text = ""
+if doubt_mode == "Type Doubt":
+    doubt_text = st.text_area("Enter your doubt here:")
+elif doubt_mode == "Upload Doubt":
+    doubt_image = st.file_uploader("Upload an image file containing your doubt", type=["jpg", "jpeg", "png"], key="doubt_image")
+    if doubt_image:
+        doubt_text = extract_text(doubt_image)
+
+def search_serp(query):
+    params = {"engine": "google", "q": query, "api_key": SERP_API_KEY, "hl": "en", "gl": "us"}
+    res = requests.get("https://serpapi.com/search", params=params)
+    if res.status_code == 200:
+        snippets = [result.get("snippet", "") for result in res.json().get("organic_results", [])[:3]]
+        return " ".join(snippets)
+    return ""
+
+def answer_doubt(question):
+    context = search_serp(question)
+    prompt = f"""You are an expert tutor. Answer the following question with detailed explanations and step-by-step reasoning.
+
+Question: {question}
+
+Context: {context}
+
+Include examples and, if needed, LaTeX for mathematical expressions.
+"""
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.5).generations[0].text.strip()
+
+def display_answer(answer):
+    try:
+        st.json(json.loads(answer))
+        return
+    except json.JSONDecodeError:
+        pass
+    if re.search(r'<[^>]+>', answer):
+        st.markdown(answer, unsafe_allow_html=True)
+    elif answer.strip().startswith(r"\min"):
+        st.latex(answer.strip())
+    elif (matrix := re.search(r"(\\left\(.*?\\right\))", answer, re.DOTALL)):
+        st.markdown(answer.replace(matrix.group(1), ""))
+        st.latex(matrix.group(1))
+    else:
+        st.markdown(answer)
+
+if st.button("Get Answer") and doubt_text:
+    with st.spinner("🔍 Searching for context and generating answer..."):
+        answer = answer_doubt(doubt_text)
+    st.subheader("Answer")
+    display_answer(answer)
