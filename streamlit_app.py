@@ -268,12 +268,6 @@ if uploaded_files:
                 st.markdown(cheatsheet)
             with st.expander("Highlighted Key Points"):
                 st.markdown(highlights)
-
-            # --- Manual Note-Taking ---
-            st.subheader("📝 My Personal Notes")
-            notes = st.text_area("Add your own notes here", key=f"notes_{name}")
-            if st.button("Save My Notes", key=f"save_{name}"):
-                st.success("Notes saved! (They will remain in this session.)")
 else:
     st.info("Upload documents above to begin.")
 
