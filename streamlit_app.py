@@ -72,8 +72,7 @@ def get_concept_map(text):
         if json_match:
             return json.loads(json_match.group(1))
         else:
-            st.error("❌ Could not extract JSON from the response.")
-            st.code(raw_text)
+            st.error("Error detected, please stand by...")
     except Exception:
         st.error("❌ Failed to parse concept map.")
         st.code(response.generations[0].text)
