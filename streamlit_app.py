@@ -15,6 +15,7 @@ from pptx import Presentation  # For .pptx support
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
+st.text("We might not be able to render perfect mind maps each time, but we're working hard to resolve the issue.")
 st.text("After the uploaded material is all processed, you can ask your doubts in the panel below.")
 
 # --- Load API Clients ---
@@ -83,7 +84,7 @@ Follow exactly this structure:
     }}
   ]
 }}
-Output only the json response, with concise definitions and as much detail as possible.
+Output only the json response, with concise definitions and as much detail as possible. I need as much content as I can get for an exam I got coming up on this content.
 Text:
 {text}
 """
