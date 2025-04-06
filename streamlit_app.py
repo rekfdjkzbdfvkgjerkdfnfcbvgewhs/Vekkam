@@ -83,7 +83,7 @@ Follow exactly this structure:
     }}
   ]
 }}
-
+Output only the json response, with concise definitions and as much detail as possible.
 Text:
 {text}
 """
