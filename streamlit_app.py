@@ -63,7 +63,6 @@ def extract_text(file):
 # --- Cohere API: Get Concept Map JSON ---
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a JSON concept map.
-
 Follow exactly this structure:
 {{
   "topic": {{
@@ -174,7 +173,7 @@ def plot_igraph_graph(g):
 # --- Additional Note-Taking and Memory Aid Features ---
 
 def generate_summary(text):
-    prompt = f"Summarize this for an exam I have tomorrow on the uploaded content."
+    prompt = f"Summarize this for an exam I have: \n\n{text[:4000]}"
     return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
 
 def generate_questions(text):
@@ -183,19 +182,19 @@ def generate_questions(text):
 
 def generate_flashcards(text):
     prompt = f"""Create flashcards from the following content.
-Each flashcard should have a "question" and an "answer".
+Each flashcard should have a "question" and an "answer".\n\n{text[:4000]}
 Text:
 """
     return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_mnemonics(text):
-    prompt = f"""Based on the following text, generate mnemonics to help remember the key points.
+    prompt = f"""Based on the following text, generate mnemonics to help remember the key points.\n\n{text[:4000]}
 Text:
 """
     return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_key_terms(text):
-    prompt = f"""Extract 10 key terms from the following text along with a brief definition for each.
+    prompt = f"""Extract 10 key terms from the following text along with a brief definition for each.\n\n{text[:4000]}
 Text:
 {text[:4000]}
 """
@@ -203,13 +202,13 @@ Text:
 
 def generate_cheatsheet(text):
     prompt = f"""Generate a cheat sheet from the following content.
-Include bullet points for essential facts, formulas, and definitions that a student should quickly review.
+Include bullet points for essential facts, formulas, and definitions that a student should quickly review.\n\n{text[:4000]}
 Text:
 """
     return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_highlights(text):
-    prompt = f"""Identify and list key sentences or statements from the following text that best summarize the most important points.
+    prompt = f"""Identify and list key sentences or statements from the following text that best summarize the most important points.\n\n{text[:4000]}
 Text:
 """
     return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
