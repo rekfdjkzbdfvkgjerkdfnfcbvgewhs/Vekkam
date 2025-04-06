@@ -9,6 +9,8 @@ import igraph as ig
 import plotly.graph_objects as go
 import requests
 import concurrent.futures
+from PIL import Image
+import pytesseract
 
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
@@ -21,8 +23,8 @@ SERP_API_KEY = st.secrets["serp_api_key"]
 
 # --- Upload Files ---
 uploaded_files = st.file_uploader(
-    "Upload documents (PDF, DOCX, TXT)",
-    type=["pdf", "docx", "txt"],
+    "Upload documents or images (PDF, DOCX, TXT, JPG, PNG)",
+    type=["pdf", "docx", "txt", "jpg", "jpeg", "png"],
     accept_multiple_files=True
 )
 
@@ -39,6 +41,10 @@ def extract_text(file):
         return "\n".join([p.text for p in doc_obj.paragraphs])
     elif file.name.endswith(".txt"):
         return StringIO(file.getvalue().decode("utf-8")).read()
+    elif file.name.lower().endswith((".jpg", ".jpeg", ".png")):
+        image = Image.open(file)
+        text = pytesseract.image_to_string(image)
+        return text
     return ""
 
 def get_concept_map(text):
@@ -96,7 +102,7 @@ Text:
         temperature=0.5
     )
     try:
-        raw_text = response.generations[0].text.strip("").strip()
+        raw_text = response.generations[0].text.strip().strip("")
         json_match = re.search(r'(\{.*\})', raw_text, re.DOTALL)
         if json_match:
             json_text = json_match.group(1)
@@ -236,12 +242,25 @@ def search_serp(query):
 def answer_doubt(question):
     context = search_serp(question)
     prompt = f"""You are an expert tutor. Answer the following question with a detailed explanation and step-by-step math reasoning.
-    
+
 Question: {question}
 
 Context: {context}
 
-Provide a clear, rigorous answer with examples if necessary."""
+Provide a clear, rigorous answer with examples if necessary.
+
+If including mathematical expressions, use proper LaTeX formatting. For example, for matrices, use:
+
+st.latex(r\"\"\" 
+\\left(
+\\begin{array}{cc}
+D_x^2 z & D_{xy}z \\\\
+D_{yx}z & D_y^2 z
+\\end{array}
+\\right)
+\"\"\")
+    
+Ensure the LaTeX code renders correctly in Streamlit."""
     response = co.generate(
         model="command",
         prompt=prompt,
@@ -249,6 +268,23 @@ Provide a clear, rigorous answer with examples if necessary."""
         temperature=0.5
     )
     return response.generations[0].text.strip()
+
+def display_answer(answer):
+    """
+    Displays the answer from answer_doubt.
+    If a LaTeX matrix is detected, it will render it using st.latex.
+    """
+    # Detect LaTeX matrix code in the answer (this is a simplistic regex check)
+    matrix_pattern = re.compile(r"(\\left\(.*?\\right\))", re.DOTALL)
+    matrix_match = matrix_pattern.search(answer)
+    if matrix_match:
+        matrix_code = matrix_match.group(1)
+        # Remove the matrix code from the text to avoid duplication in markdown
+        answer_text = answer.replace(matrix_code, "")
+        st.markdown(answer_text)
+        st.latex(matrix_code)
+    else:
+        st.markdown(answer)
 
 def process_file(file):
     """Process a single uploaded file and return its name, extracted text, concept map, summary, and quiz questions."""
@@ -290,4 +326,4 @@ if st.button("Get Answer") and question:
     with st.spinner("🔍 Searching for context and generating answer..."):
         answer = answer_doubt(question)
     st.subheader("Answer")
-    st.markdown(answer)
+    display_answer(answer)
