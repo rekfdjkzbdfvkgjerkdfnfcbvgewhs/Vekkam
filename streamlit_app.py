@@ -83,7 +83,7 @@ Follow exactly this structure:
     }}
   ]
 }}
-
+Make the mind map as detailed as possible in terms of scope but keep the definitions concise. They're for an exam.
 Text:
 {text}
 """
@@ -174,27 +174,25 @@ def plot_igraph_graph(g):
 # --- Additional Note-Taking and Memory Aid Features ---
 
 def generate_summary(text):
-    prompt = f"Summarize this in 5-7 bullet points:\n\n{text[:4000]}"
-    return co.generate(model="command", prompt=prompt, max_tokens=1000).generations[0].text.strip()
+    prompt = f"Summarize this for an exam I have tomorrow on this content."
+    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
 
 def generate_questions(text):
     prompt = f"Generate 15 educational quiz questions from the following text:\n\n{text[:4000]}"
-    return co.generate(model="command", prompt=prompt, max_tokens=1000).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
 
 def generate_flashcards(text):
-    prompt = f"""Create 10 flashcards from the following content.
+    prompt = f"""Create flashcards from the following content.
 Each flashcard should have a "question" and an "answer".
 Text:
-{text[:4000]}
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_mnemonics(text):
-    prompt = f"""Based on the following text, generate 5 mnemonics to help remember the key points.
+    prompt = f"""Based on the following text, generate mnemonics to help remember the key points.
 Text:
-{text[:4000]}
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=1000, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_key_terms(text):
     prompt = f"""Extract 10 key terms from the following text along with a brief definition for each.
@@ -204,19 +202,17 @@ Text:
     return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
 
 def generate_cheatsheet(text):
-    prompt = f"""Generate a one-page cheat sheet from the following content.
+    prompt = f"""Generate a cheat sheet from the following content.
 Include bullet points for essential facts, formulas, and definitions that a student should quickly review.
 Text:
-{text[:4000]}
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_highlights(text):
-    prompt = f"""Identify and list 10 key sentences or statements from the following text that best summarize the most important points.
+    prompt = f"""Identify and list key sentences or statements from the following text that best summarize the most important points.
 Text:
-{text[:4000]}
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 # --- Process Each File ---
 def process_file(file):
@@ -245,8 +241,6 @@ if uploaded_files:
                 fig = plot_igraph_graph(g)
                 st.subheader("🧠 Interactive Mind Map")
                 st.plotly_chart(fig, use_container_width=True)
-                with st.expander("🧾 Concept Map JSON"):
-                    st.json(concept_json)
             else:
                 st.error("Concept map generation failed.")
 
@@ -257,7 +251,6 @@ if uploaded_files:
             st.markdown(questions)
 
             # Display Additional Memory Aids
-            st.subheader("📚 Memory Aids & Note-Taking")
             with st.expander("Flashcards"):
                 st.markdown(flashcards)
             with st.expander("Mnemonics"):
@@ -273,7 +266,7 @@ else:
 
 # --- Doubt Solver Section ---
 st.markdown("---")
-st.header("❓ Ask a Doubt")
+st.header("Ask a Doubt")
 
 doubt_mode = st.radio("How would you like to provide your doubt?", ["Type Doubt", "Upload Doubt"])
 doubt_text = ""
