@@ -270,10 +270,11 @@ Ensure that the LaTeX code renders correctly in Streamlit."""
 def display_answer(answer):
     """
     Displays the answer from answer_doubt.
-    If the answer is valid JSON, display it using st.json.
-    If it contains HTML markup, render it using st.markdown with unsafe_allow_html=True.
-    If a LaTeX matrix is detected, render it using st.latex.
-    Otherwise, display the answer as Markdown.
+    - If the answer is valid JSON, display it using st.json.
+    - If it contains HTML markup, render it using st.markdown with unsafe_allow_html=True.
+    - If the answer is a pure LaTeX expression (e.g. it starts with '\\min'), render it using st.latex.
+    - If a LaTeX matrix is detected within a larger text, render it separately with st.latex.
+    - Otherwise, display the answer as Markdown.
     """
     # Check if the answer is valid JSON
     try:
@@ -288,7 +289,12 @@ def display_answer(answer):
         st.markdown(answer, unsafe_allow_html=True)
         return
 
-    # Check for LaTeX matrix code
+    # Check if answer appears to be a pure LaTeX expression (e.g., starting with "\min")
+    if answer.strip().startswith(r"\min"):
+        st.latex(answer.strip())
+        return
+
+    # Check for LaTeX matrix code within a larger text
     matrix_pattern = re.compile(r"(\\left\(.*?\\right\))", re.DOTALL)
     matrix_match = matrix_pattern.search(answer)
     if matrix_match:
