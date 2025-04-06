@@ -341,16 +341,17 @@ else:
 st.markdown("---")
 st.header("❓ Ask a Doubt")
 
-# Allow the user to choose between typing or uploading a doubt
-doubt_mode = st.radio("How would you like to provide your doubt?", ["Type Doubt", "Upload Doubt File"])
+# Allow the user to choose how to provide their doubt:
+doubt_mode = st.radio("How would you like to provide your doubt?", 
+                      ["Type Doubt", "Upload Doubt"])
 
 doubt_text = ""
 if doubt_mode == "Type Doubt":
     doubt_text = st.text_area("Enter your doubt here:")
-else:
-    doubt_file = st.file_uploader("Upload a text file containing your doubt", type=["txt"], key="doubt")
-    if doubt_file:
-        doubt_text = doubt_file.getvalue().decode("utf-8")
+elif doubt_mode == "Upload Doubt":
+    doubt_image = st.file_uploader("Upload an image file containing your doubt", type=["jpg", "jpeg", "png"], key="doubt_image")
+    if doubt_image:
+        doubt_text = extract_text(doubt_image)
 
 if st.button("Get Answer") and doubt_text:
     with st.spinner("🔍 Searching for context and generating answer..."):
