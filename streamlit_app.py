@@ -62,18 +62,24 @@ def extract_text(file):
 
 # --- Cohere API: Get Concept Map JSON ---
 def get_concept_map(text):
-    prompt = f"""You are an AI that converts text into a concept map in JSON. 
-Follow this structure exactly:
+    prompt = f"""You are an AI that converts text into a JSON concept map.
+
+Follow exactly this structure:
 {{
   "topic": {{
     "title": "Main Topic",
-    "description": "Summary"
+    "description": "Short overview"
   }},
   "subtopics": [
     {{
       "title": "Subtopic A",
       "description": "Explanation",
-      "children": [ {{ "title": "...", "description": "..." }} ]
+      "children": [
+        {{
+          "title": "Child 1",
+          "description": "Explanation"
+        }}
+      ]
     }}
   ]
 }}
@@ -89,12 +95,27 @@ Text:
     )
 
     raw_output = response.generations[0].text.strip()
+
+    # Attempt to extract JSON-like content
     try:
-        json_str = re.search(r'\{.*\}', raw_output, re.DOTALL).group(0)
+        match = re.search(r'\{.*\}', raw_output, re.DOTALL)
+        if not match:
+            raise ValueError("No JSON-like content found.")
+
+        json_str = match.group(0)
+
+        # Fix common formatting issues
+        json_str = re.sub(r",\s*}", "}", json_str)  # trailing commas before }
+        json_str = re.sub(r",\s*]", "]", json_str)  # trailing commas before ]
+        json_str = re.sub(r'“|”', '"', json_str)    # smart quotes to normal quotes
+
         data = json.loads(json_str)
+
         if "topic" not in data or "title" not in data["topic"]:
-            raise ValueError("Invalid concept map format: Missing 'topic'")
+            raise ValueError("Missing 'topic' in concept map.")
+
         return data
+
     except Exception as e:
         st.error(f"Concept map generation failed: {e}")
         st.code(raw_output)
