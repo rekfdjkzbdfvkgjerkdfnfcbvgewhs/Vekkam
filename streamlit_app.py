@@ -205,8 +205,6 @@ if uploaded_files:
                 fig = plot_igraph_graph(g)
                 st.subheader("🧠 Interactive Mind Map")
                 st.plotly_chart(fig, use_container_width=True)
-                with st.expander("🧾 Concept Map JSON"):
-                    st.json(concept_json)
 
             st.subheader("📌 Summary")
             st.markdown(summary)
