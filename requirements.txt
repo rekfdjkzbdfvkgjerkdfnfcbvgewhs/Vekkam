@@ -6,4 +6,4 @@ python-igraph
 plotly
 requests
 Pillow
-pytesseract
+tesseract
