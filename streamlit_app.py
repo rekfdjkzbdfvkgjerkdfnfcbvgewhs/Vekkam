@@ -15,7 +15,7 @@ from pptx import Presentation  # For PPTX support
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
-st.text("After the uploaded material is processed, review summaries, flashcards, and mnemonics below.")
+st.text("Review summaries, flashcards, cheat sheets, and more to reinforce your learning.")
 
 # --- Load API Clients ---
 co = cohere.Client(st.secrets["cohere_api_key"])
@@ -171,7 +171,7 @@ def plot_igraph_graph(g):
                                       xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                                       yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
 
-# --- Additional Note-Taking Features ---
+# --- Additional Note-Taking and Memory Aid Features ---
 
 def generate_summary(text):
     prompt = f"Summarize this in 5-7 bullet points:\n\n{text[:4000]}"
@@ -203,6 +203,21 @@ Text:
 """
     return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
 
+def generate_cheatsheet(text):
+    prompt = f"""Generate a one-page cheat sheet from the following content.
+Include bullet points for essential facts, formulas, and definitions that a student should quickly review.
+Text:
+{text[:4000]}
+"""
+    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
+
+def generate_highlights(text):
+    prompt = f"""Identify and list 10 key sentences or statements from the following text that best summarize the most important points.
+Text:
+{text[:4000]}
+"""
+    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
+
 # --- Process Each File ---
 def process_file(file):
     text = extract_text(file)
@@ -212,13 +227,16 @@ def process_file(file):
     flashcards = generate_flashcards(text)
     mnemonics = generate_mnemonics(text)
     key_terms = generate_key_terms(text)
-    return file.name, text, concept_json, summary, questions, flashcards, mnemonics, key_terms
+    cheatsheet = generate_cheatsheet(text)
+    highlights = generate_highlights(text)
+    return file.name, text, concept_json, summary, questions, flashcards, mnemonics, key_terms, cheatsheet, highlights
 
 # --- Main App Logic ---
 if uploaded_files:
     for file in uploaded_files:
         with st.spinner(f"Processing: {file.name}"):
-            name, text, concept_json, summary, questions, flashcards, mnemonics, key_terms = process_file(file)
+            (name, text, concept_json, summary, questions, flashcards,
+             mnemonics, key_terms, cheatsheet, highlights) = process_file(file)
             st.markdown(f"---\n## Document: {name}")
 
             # Display Concept Map & Mind Map
@@ -238,7 +256,7 @@ if uploaded_files:
             st.subheader("📝 Quiz Questions")
             st.markdown(questions)
 
-            # --- New Memory Aids Section ---
+            # Display Additional Memory Aids
             st.subheader("📚 Memory Aids & Note-Taking")
             with st.expander("Flashcards"):
                 st.markdown(flashcards)
@@ -246,6 +264,16 @@ if uploaded_files:
                 st.markdown(mnemonics)
             with st.expander("Key Terms"):
                 st.markdown(key_terms)
+            with st.expander("Cheat Sheet"):
+                st.markdown(cheatsheet)
+            with st.expander("Highlighted Key Points"):
+                st.markdown(highlights)
+
+            # --- Manual Note-Taking ---
+            st.subheader("📝 My Personal Notes")
+            notes = st.text_area("Add your own notes here", key=f"notes_{name}")
+            if st.button("Save My Notes", key=f"save_{name}"):
+                st.success("Notes saved! (They will remain in this session.)")
 else:
     st.info("Upload documents above to begin.")
 
@@ -253,8 +281,7 @@ else:
 st.markdown("---")
 st.header("❓ Ask a Doubt")
 
-doubt_mode = st.radio("How would you like to provide your doubt?", 
-                      ["Type Doubt", "Upload Doubt"])
+doubt_mode = st.radio("How would you like to provide your doubt?", ["Type Doubt", "Upload Doubt"])
 doubt_text = ""
 if doubt_mode == "Type Doubt":
     doubt_text = st.text_area("Enter your doubt here:")
