@@ -174,7 +174,7 @@ def plot_igraph_graph(g):
 # --- Additional Note-Taking and Memory Aid Features ---
 
 def generate_summary(text):
-    prompt = f"Summarize this for an exam I have tomorrow on this content."
+    prompt = f"Summarize this for an exam I have tomorrow on the uploaded content."
     return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
 
 def generate_questions(text):
