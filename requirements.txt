@@ -6,5 +6,5 @@ python-igraph
 plotly
 requests
 Pillow
-tesseract
+pytesseract
 python-pptx
