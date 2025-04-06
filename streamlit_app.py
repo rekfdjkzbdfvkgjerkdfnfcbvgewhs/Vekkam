@@ -15,8 +15,6 @@ from pptx import Presentation  # For .pptx support
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
-st.text("We might not be able to render perfect mind maps each time, but we're working hard to resolve the issue.")
-st.text("After the uploaded material is all processed, you can ask your doubts in the panel below.")
 
 # --- Load API Clients ---
 co = cohere.Client(st.secrets["cohere_api_key"])
