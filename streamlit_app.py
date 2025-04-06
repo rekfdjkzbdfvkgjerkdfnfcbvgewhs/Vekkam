@@ -249,18 +249,16 @@ Context: {context}
 
 Provide a clear, rigorous answer with examples if necessary.
 
-If including mathematical expressions, use proper LaTeX formatting. For example, for matrices, use:
+If including mathematical expressions, use proper LaTeX formatting. For example, for matrices, you might use the following snippet:
 
-st.latex(r\"\"\" 
 \\left(
-\\begin{array}{cc}
-D_x^2 z & D_{xy}z \\\\
-D_{yx}z & D_y^2 z
-\\end{array}
+\\begin{{array}}{{cc}}
+D_x^2 z & D_{{xy}}z \\\\
+D_{{yx}}z & D_y^2 z
+\\end{{array}}
 \\right)
-\"\"\")
-    
-Ensure the LaTeX code renders correctly in Streamlit."""
+
+Ensure that the LaTeX code renders correctly in Streamlit."""
     response = co.generate(
         model="command",
         prompt=prompt,
