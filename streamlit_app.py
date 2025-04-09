@@ -140,7 +140,7 @@ def plot_mind_map(nodes, edges):
     fig = go.Figure(
         data=[edge_trace, node_trace],
         layout=go.Layout(
-            title="🧠 Gemini-Generated Mind Map",
+            title="🧠 Mind Map",
             width=1200, height=800,
             hovermode='closest',
             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
