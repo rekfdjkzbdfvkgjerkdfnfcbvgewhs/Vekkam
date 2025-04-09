@@ -320,23 +320,20 @@ Include examples and, if needed, LaTeX for mathematical expressions.
     return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
 
 def display_answer(answer):
-    # Try to decode JSON first; if successful, render it as JSON
+    # First, try to see if the answer is valid JSON and render that.
     try:
         st.json(json.loads(answer))
         return
     except json.JSONDecodeError:
+        # Not valid JSON, so we'll proceed.
         pass
 
-    # If the answer starts with an HTML document, render with components.html
+    # Check if the response appears to be HTML.
     answer_strip = answer.strip().lower()
     if answer_strip.startswith("<html") or answer_strip.startswith("<!doctype html"):
-        components.html(answer, height=600)
+        # Render the HTML response using components.html.
+        # You can adjust the height and scrolling parameters as needed.
+        components.html(answer, height=800, scrolling=True)
     else:
-        # Otherwise, render using Markdown with unsafe HTML enabled
+        # Otherwise, display using markdown (with unsafe HTML allowed).
         st.markdown(answer, unsafe_allow_html=True)
-
-if st.button("Get Answer") and doubt_text:
-    with st.spinner("🔍 Searching for context and generating answer..."):
-        answer = answer_doubt(doubt_text)
-    st.subheader("Answer")
-    display_answer(answer)
