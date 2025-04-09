@@ -1,9 +1,9 @@
 import streamlit as st
-import cohere
-import fitz  # PyMuPDF for PDFs
+import fitz  # PyMuPDF
 import docx
 import json
 import re
+import html
 from io import StringIO
 from PIL import Image
 import pytesseract
@@ -16,7 +16,7 @@ import streamlit.components.v1 as components
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 
-# --- Custom HTML Banner ---
+# --- HTML Banner ---
 st.html("""
 <div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
     <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
@@ -26,10 +26,6 @@ st.html("""
 st.title("Vekkam - the Study Buddy of Your Dreams")
 st.text("Review summaries, flashcards, cheat sheets, and more to reinforce your learning.")
 
-# --- API Setup ---
-co = cohere.Client(st.secrets["cohere_api_key"])
-SERP_API_KEY = st.secrets["serp_api_key"]
-
 # --- File Upload ---
 uploaded_files = st.file_uploader(
     "Upload documents or images (PDF, DOCX, PPTX, TXT, JPG, PNG)",
@@ -37,7 +33,50 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# --- Utility: Render response as HTML or Markdown ---
+# --- Text Extraction ---
+def extract_text(file):
+    ext = file.name.lower()
+    if ext.endswith(".pdf"):
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            return "".join(page.get_text() for page in doc)
+    elif ext.endswith(".docx"):
+        return "\n".join([p.text for p in docx.Document(file).paragraphs])
+    elif ext.endswith(".pptx"):
+        prs = Presentation(file)
+        return "\n".join(shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, "text"))
+    elif ext.endswith(".txt"):
+        return StringIO(file.getvalue().decode("utf-8")).read()
+    elif ext.endswith((".jpg", ".jpeg", ".png")):
+        return pytesseract.image_to_string(Image.open(file))
+    return ""
+
+# --- Gemini API Call ---
+def call_gemini(prompt, temperature=0.7, max_tokens=2048):
+    url = "https://vekkam.streamlit.app/"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {st.secrets['gemini_api_key']}"
+    }
+    payload = {
+        "model": "gemini-pro",
+        "prompt": prompt,
+        "max_tokens": max_tokens,
+        "temperature": temperature
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    
+    if response.status_code == 200:
+        try:
+            result = response.json()
+            return result.get("generated_text", "").strip()
+        except Exception as e:
+            return f"<p style='color:red;'>Parsing error: {e}</p>"
+    else:
+        return f"<p style='color:red;'>Gemini API error {response.status_code}: {html.escape(response.text)}</p>"
+
+
+# --- Smart Renderer ---
 def render_response(response):
     response = response.strip()
     if response.lower().startswith("<!doctype html") or response.lower().startswith("<html"):
@@ -45,41 +84,14 @@ def render_response(response):
     else:
         st.markdown(response, unsafe_allow_html=True)
 
-# --- Text Extraction ---
-def extract_text(file):
-    ext = file.name.lower()
-    if ext.endswith(".pdf"):
-        text = ""
-        with fitz.open(stream=file.read(), filetype="pdf") as doc:
-            for page in doc:
-                text += page.get_text()
-        return text
-    elif ext.endswith(".docx"):
-        doc_obj = docx.Document(file)
-        return "\n".join([p.text for p in doc_obj.paragraphs])
-    elif ext.endswith(".pptx"):
-        prs = Presentation(file)
-        text = ""
-        for slide in prs.slides:
-            for shape in slide.shapes:
-                if hasattr(shape, "text"):
-                    text += shape.text + "\n"
-        return text
-    elif ext.endswith(".txt"):
-        return StringIO(file.getvalue().decode("utf-8")).read()
-    elif ext.endswith((".jpg", ".jpeg", ".png")):
-        image = Image.open(file)
-        return pytesseract.image_to_string(image)
-    return ""
-
-# --- Cohere Concept Map Generator ---
+# --- Concept Map ---
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a JSON concept map.
-Follow exactly this structure:
+Use this format:
 {{
   "topic": {{
     "title": "Main Topic",
-    "description": "Short overview"
+    "description": "Overview"
   }},
   "subtopics": [
     {{
@@ -94,31 +106,20 @@ Follow exactly this structure:
     }}
   ]
 }}
-Make the mind map as detailed as possible in terms of scope but keep the definitions concise.
-They're for an exam. Keep more branches and short definitions.
+Make the map detailed with concise definitions.
 Text:
-{text}
-"""
-    response = co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.5)
-    raw_output = response.generations[0].text.strip()
+{text}"""
+    raw_output = call_gemini(prompt, temperature=0.4)
     try:
         match = re.search(r'\{.*\}', raw_output, re.DOTALL)
-        if not match:
-            raise ValueError("No JSON-like content found.")
-        json_str = match.group(0)
-        json_str = re.sub(r",\s*}", "}", json_str)
-        json_str = re.sub(r",\s*]", "]", json_str)
-        json_str = re.sub(r'“|”', '"', json_str)
-        data = json.loads(json_str)
-        if "topic" not in data or "title" not in data["topic"]:
-            raise ValueError("Missing 'topic' in concept map.")
-        return data
+        json_str = re.sub(r",\s*([}\]])", r"\1", match.group(0))
+        return json.loads(json_str)
     except Exception as e:
         st.error(f"Concept map generation failed: {e}")
         st.code(raw_output)
         return None
 
-# --- Graph Builder ---
+# --- Graph Plotting ---
 def build_igraph_graph(concept_json):
     vertices, edges = [], []
 
@@ -168,20 +169,16 @@ def plot_igraph_graph(g):
                                       xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                                       yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
 
-# --- Cohere Generator ---
-def call_cohere(prompt, temperature=0.7):
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=temperature).generations[0].text.strip()
+# --- AI Features using Gemini ---
+def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", temperature=0.5)
+def generate_questions(text): return call_gemini(f"Generate 15 educational quiz questions:\n\n{text[:4000]}", temperature=0.5)
+def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text[:4000]}")
+def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text[:4000]}")
+def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text[:4000]}", temperature=0.6)
+def generate_cheatsheet(text): return call_gemini(f"Create a bullet-point cheat sheet:\n\n{text[:4000]}", temperature=0.7)
+def generate_highlights(text): return call_gemini(f"List key points and important facts:\n\n{text[:4000]}")
 
-# --- AI Features ---
-def generate_summary(text): return call_cohere(f"Summarize this for an exam I have:\n\n{text[:4000]}", temperature=0.5)
-def generate_questions(text): return call_cohere(f"Generate 15 educational quiz questions:\n\n{text[:4000]}", temperature=0.5)
-def generate_flashcards(text): return call_cohere(f"Create flashcards with Q&A:\n\n{text[:4000]}")
-def generate_mnemonics(text): return call_cohere(f"Generate mnemonics for this content:\n\n{text[:4000]}")
-def generate_key_terms(text): return call_cohere(f"Extract 10 key terms and their definitions:\n\n{text[:4000]}", temperature=0.6)
-def generate_cheatsheet(text): return call_cohere(f"Create a cheat sheet with bullets:\n\n{text[:4000]}", temperature=0.7)
-def generate_highlights(text): return call_cohere(f"List key sentences summarizing the text:\n\n{text[:4000]}")
-
-# --- Process File ---
+# --- File Processor ---
 def process_file(file):
     text = extract_text(file)
     return {
@@ -203,6 +200,7 @@ if uploaded_files:
         with st.spinner(f"Processing: {file.name}"):
             result = process_file(file)
             st.markdown(f"---\n## Document: {result['name']}")
+
             if result["concept_map"]:
                 g = build_igraph_graph(result["concept_map"])
                 fig = plot_igraph_graph(g)
