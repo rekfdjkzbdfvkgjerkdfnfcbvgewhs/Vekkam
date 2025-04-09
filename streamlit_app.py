@@ -62,13 +62,12 @@ def call_gemini(prompt, temperature=0.7, max_tokens=2048):
     }
 
     response = requests.post(url, headers=headers, json=payload)
-    
+
     if response.status_code == 200:
-        try:
-            result = response.json()
-            return result.get("generated_text", "").strip()
-        except Exception as e:
-            return f"<p style='color:red;'>Parsing error: {e}</p>"
+        text = response.text.strip()
+        if not text:
+            return "<p style='color:red;'>Gemini returned an empty response.</p>"
+        return text
     else:
         return f"<p style='color:red;'>Gemini API error {response.status_code}: {html.escape(response.text)}</p>"
 
