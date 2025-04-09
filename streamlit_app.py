@@ -89,7 +89,7 @@ Text:
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=2500,
+        max_tokens=2000,
         temperature=0.5
     )
     raw_output = response.generations[0].text.strip()
@@ -108,69 +108,36 @@ Text:
         return data
     except Exception as e:
         st.error(f"Concept map generation failed: {e}")
+        st.code(raw_output)
         return None
 
 # --- Build and Plot Graph ---
-def plot_igraph_graph(g):
-    # Use a Reingold–Tilford hierarchical layout 
-    # (root=0 means the first node is treated as the 'top')
-    layout = g.layout_reingold_tilford(root=[0], mode='in')
-    
-    # We'll store edge endpoints
-    edge_x, edge_y = [], []
-    for e in g.es:
-        x0, y0 = layout[e.source]
-        x1, y1 = layout[e.target]
-        # Flip the y-coordinates so that the root is at the TOP
-        y0 = -y0
-        y1 = -y1
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
+def build_igraph_graph(concept_json):
+    vertices = []
+    edges = []
 
-    edge_trace = go.Scatter(
-        x=edge_x, 
-        y=edge_y, 
-        mode='lines',
-        line=dict(width=2, color='#888'),
-        hoverinfo='none'
-    )
+    def walk(node, parent_id=None):
+        node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
+        description = node.get("description", "")
+        vertices.append({"id": node_id, "label": node["title"], "description": description})
+        if parent_id:
+            edges.append((parent_id, node_id))
+        for child in node.get("children", []):
+            walk(child, node_id)
 
-    # Plot the nodes
-    node_x, node_y, texts = [], [], []
-    for i, v in enumerate(g.vs):
-        x, y = layout[i]
-        # Flip y for top-down display
-        y = -y
-        node_x.append(x)
-        node_y.append(y)
-        
-        # Combine label + description in the hover text
-        label = v['label']
-        desc = v['description']
-        texts.append(f"<b>{label}</b><br>{desc}")
-
-    node_trace = go.Scatter(
-        x=node_x, 
-        y=node_y, 
-        mode='markers+text', 
-        text=g.vs["label"],
-        textposition="top center",
-        marker=dict(size=20, color='#00cc96', line_width=1),
-        hoverinfo='text', 
-        hovertext=texts
-    )
-
-    fig = go.Figure(
-        data=[edge_trace, node_trace],
-        layout=go.Layout(
-            title="Hierarchical Mind Map",
-            hovermode='closest',
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            margin=dict(l=0, r=0, b=0, t=50)
-        )
-    )
-    return fig
+    root = {
+        "title": concept_json["topic"]["title"],
+        "description": concept_json["topic"].get("description", ""),
+        "children": concept_json.get("subtopics", [])
+    }
+    walk(root)
+    g = ig.Graph(directed=True)
+    g.add_vertices([v["id"] for v in vertices])
+    g.vs["label"] = [v["label"] for v in vertices]
+    g.vs["description"] = [v["description"] for v in vertices]
+    if edges:
+        g.add_edges(edges)
+    return g
 
 def plot_igraph_graph(g):
     layout = g.layout("fr")
@@ -207,24 +174,24 @@ def plot_igraph_graph(g):
 
 def generate_summary(text):
     prompt = f"Summarize this for an exam I have: \n\n{text[:4000]}"
-    return co.generate(model="command", prompt=prompt, max_tokens=2500).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
 
 def generate_questions(text):
     prompt = f"Generate 15 educational quiz questions from the following text:\n\n{text[:4000]}"
-    return co.generate(model="command", prompt=prompt, max_tokens=2500).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
 
 def generate_flashcards(text):
     prompt = f"""Create flashcards from the following content.
 Each flashcard should have a "question" and an "answer".\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_mnemonics(text):
     prompt = f"""Based on the following text, generate mnemonics to help remember the key points.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_key_terms(text):
     prompt = f"""Extract 10 key terms from the following text along with a brief definition for each.\n\n{text[:4000]}
@@ -238,13 +205,13 @@ def generate_cheatsheet(text):
 Include bullet points for essential facts, formulas, and definitions that a student should quickly review.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_highlights(text):
     prompt = f"""Identify and list key sentences or statements from the following text that best summarize the most important points.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 # --- Process Each File ---
 def process_file(file):
@@ -327,7 +294,7 @@ Context: {context}
 
 Include examples and, if needed, LaTeX for mathematical expressions.
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.5).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.5).generations[0].text.strip()
 
 def display_answer(answer):
     try:
