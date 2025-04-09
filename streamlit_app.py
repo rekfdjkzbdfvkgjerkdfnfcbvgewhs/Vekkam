@@ -68,23 +68,30 @@ def call_gemini(prompt, temperature=0.7, max_tokens=2048):
 # --- Generate Mind Map JSON ---
 def get_mind_map(text):
     prompt = f"""
-You are a mind map generator. Based on this content, return JSON with:
-- nodes: each node has an "id" and "label"
-- edges: each edge has "source" and "target" node IDs
+You are an assistant that creates a JSON mind map from the text below.
 
-Only output raw JSON. No additional Text. Keep is concise yet covering all concepts. I need to prepare this presentation thoroughly for my exam.
+Structure:
+{{
+  "nodes": [{{"id": "1", "label": "Label", "description": "Short definition"}}],
+  "edges": [{{"source": "1", "target": "2"}}]
+}}
+
+Ensure:
+- Each node has a short but meaningful 'description'
+- Output only valid JSON with nodes and edges
+- Avoid extra commentary or markdown
 
 Text:
 {text}
 """
-    response = call_gemini(prompt, temperature=0.4, max_tokens=8192)
+    response = call_gemini(prompt, temperature=0.4)
     try:
         json_data = re.search(r'\{.*\}', response, re.DOTALL)
         if json_data:
             cleaned = re.sub(r",\s*([}\]])", r"\1", json_data.group(0))
             return json.loads(cleaned)
     except Exception as e:
-        st.error(f"Failed to parse JSON: {e}")
+        st.error(f"Failed to parse Gemini response: {e}")
         st.code(response)
     return None
 
