@@ -77,7 +77,7 @@ Only output raw JSON. No additional Text. Keep is concise yet covering all conce
 Text:
 {text}
 """
-    response = call_gemini(prompt, temperature=0.4)
+    response = call_gemini(prompt, temperature=0.4, max_tokens=8192)
     try:
         json_data = re.search(r'\{.*\}', response, re.DOTALL)
         if json_data:
