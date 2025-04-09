@@ -82,43 +82,24 @@ def render_response(response):
 
 # --- Concept Map via Gemini ---
 def get_concept_map(text):
-    prompt = f"""You are an AI that converts text into a JSON concept map.
-Use this format:
-{{
-  "topic": {{
-    "title": "Main Topic",
-    "description": "Overview"
-  }},
-  "subtopics": [
-    {{
-      "title": "Subtopic A",
-      "description": "Explanation",
-      "children": [
-        {{
-          "title": "Child 1",
-          "description": "Explanation"
-        }}
-      ]
-    }}
-  ]
-}}
-Make the map detailed but concise.
+    prompt = f"""You are an AI that creates a concept map in HTML format.
+The HTML should contain:
+- A main title for the topic
+- Sections for each subtopic with their own children listed
+- Use <h2>, <h3>, <ul>, <li> etc. for structure
+- Avoid inline styles; use clean semantic HTML
+- Do not include JSON or markdown
+
 Text:
-{text}"""
+{text}
+"""
     raw_output = call_gemini(prompt, temperature=0.4)
 
-    try:
-        match = re.search(r'\{.*\}', raw_output, re.DOTALL)
-        if not match:
-            raise ValueError("No JSON block found in Gemini output.")
-        
-        json_str = re.sub(r",\s*([}\]])", r"\1", match.group(0))
-        return json.loads(json_str)
-        
-    except Exception as e:
-        st.error(f"Concept map generation failed: {e}")
-        st.code(raw_output)
+    if not raw_output:
+        st.error("Concept map generation failed: No response from Gemini.")
         return None
+
+    return raw_output.strip()
 
 # --- Build and Plot Mind Map ---
 def build_igraph_graph(concept_json):
@@ -205,12 +186,11 @@ if uploaded_files:
             st.markdown(f"---\n## Document: {result['name']}")
 
             if result["concept_map"]:
-                g = build_igraph_graph(result["concept_map"])
-                fig = plot_igraph_graph(g)
-                st.subheader("🧠 Interactive Mind Map")
-                st.plotly_chart(fig, use_container_width=True)
+                st.subheader("🧠 Concept Map")
+                render_response(result["concept_map"])
             else:
                 st.error("Concept map generation failed.")
+
 
             st.subheader("📌 Summary")
             render_response(result["summary"])
