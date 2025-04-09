@@ -112,32 +112,66 @@ Text:
         return None
 
 # --- Build and Plot Graph ---
-def build_igraph_graph(concept_json):
-    vertices = []
-    edges = []
+def plot_igraph_graph(g):
+    # Use a Reingold–Tilford hierarchical layout 
+    # (root=0 means the first node is treated as the 'top')
+    layout = g.layout_reingold_tilford(root=[0], mode='in')
+    
+    # We'll store edge endpoints
+    edge_x, edge_y = [], []
+    for e in g.es:
+        x0, y0 = layout[e.source]
+        x1, y1 = layout[e.target]
+        # Flip the y-coordinates so that the root is at the TOP
+        y0 = -y0
+        y1 = -y1
+        edge_x += [x0, x1, None]
+        edge_y += [y0, y1, None]
 
-    def walk(node, parent_id=None):
-        node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
-        description = node.get("description", "")
-        vertices.append({"id": node_id, "label": node["title"], "description": description})
-        if parent_id:
-            edges.append((parent_id, node_id))
-        for child in node.get("children", []):
-            walk(child, node_id)
+    edge_trace = go.Scatter(
+        x=edge_x, 
+        y=edge_y, 
+        mode='lines',
+        line=dict(width=2, color='#888'),
+        hoverinfo='none'
+    )
 
-    root = {
-        "title": concept_json["topic"]["title"],
-        "description": concept_json["topic"].get("description", ""),
-        "children": concept_json.get("subtopics", [])
-    }
-    walk(root)
-    g = ig.Graph(directed=True)
-    g.add_vertices([v["id"] for v in vertices])
-    g.vs["label"] = [v["label"] for v in vertices]
-    g.vs["description"] = [v["description"] for v in vertices]
-    if edges:
-        g.add_edges(edges)
-    return g
+    # Plot the nodes
+    node_x, node_y, texts = [], [], []
+    for i, v in enumerate(g.vs):
+        x, y = layout[i]
+        # Flip y for top-down display
+        y = -y
+        node_x.append(x)
+        node_y.append(y)
+        
+        # Combine label + description in the hover text
+        label = v['label']
+        desc = v['description']
+        texts.append(f"<b>{label}</b><br>{desc}")
+
+    node_trace = go.Scatter(
+        x=node_x, 
+        y=node_y, 
+        mode='markers+text', 
+        text=g.vs["label"],
+        textposition="top center",
+        marker=dict(size=20, color='#00cc96', line_width=1),
+        hoverinfo='text', 
+        hovertext=texts
+    )
+
+    fig = go.Figure(
+        data=[edge_trace, node_trace],
+        layout=go.Layout(
+            title="Hierarchical Mind Map",
+            hovermode='closest',
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            margin=dict(l=0, r=0, b=0, t=50)
+        )
+    )
+    return fig
 
 def plot_igraph_graph(g):
     layout = g.layout("fr")
