@@ -89,7 +89,7 @@ Text:
     response = co.generate(
         model="command",
         prompt=prompt,
-        max_tokens=2000,
+        max_tokens=2500,
         temperature=0.5
     )
     raw_output = response.generations[0].text.strip()
@@ -208,24 +208,24 @@ def plot_igraph_graph(g):
 
 def generate_summary(text):
     prompt = f"Summarize this for an exam I have: \n\n{text[:4000]}"
-    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2500).generations[0].text.strip()
 
 def generate_questions(text):
     prompt = f"Generate 15 educational quiz questions from the following text:\n\n{text[:4000]}"
-    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2500).generations[0].text.strip()
 
 def generate_flashcards(text):
     prompt = f"""Create flashcards from the following content.
 Each flashcard should have a "question" and an "answer".\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.7).generations[0].text.strip()
 
 def generate_mnemonics(text):
     prompt = f"""Based on the following text, generate mnemonics to help remember the key points.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.7).generations[0].text.strip()
 
 def generate_key_terms(text):
     prompt = f"""Extract 10 key terms from the following text along with a brief definition for each.\n\n{text[:4000]}
@@ -239,13 +239,13 @@ def generate_cheatsheet(text):
 Include bullet points for essential facts, formulas, and definitions that a student should quickly review.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.7).generations[0].text.strip()
 
 def generate_highlights(text):
     prompt = f"""Identify and list key sentences or statements from the following text that best summarize the most important points.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.7).generations[0].text.strip()
 
 # --- Process Each File ---
 def process_file(file):
@@ -328,7 +328,7 @@ Context: {context}
 
 Include examples and, if needed, LaTeX for mathematical expressions.
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.5).generations[0].text.strip()
+    return co.generate(model="command", prompt=prompt, max_tokens=2500, temperature=0.5).generations[0].text.strip()
 
 def display_answer(answer):
     try:
