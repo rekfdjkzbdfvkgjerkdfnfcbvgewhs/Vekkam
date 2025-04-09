@@ -49,27 +49,25 @@ def extract_text(file):
 
 # --- Gemini API Call (via Vekkam Endpoint) ---
 def call_gemini(prompt, temperature=0.7, max_tokens=2048):
-    url = "https://vekkam.streamlit.app/"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {st.secrets['gemini_api_key']}"
-    }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={st.secrets['gemini_api_key']}"
+    headers = {"Content-Type": "application/json"}
     payload = {
-        "model": "gemini-pro",
-        "prompt": prompt,
-        "max_tokens": max_tokens,
-        "temperature": temperature
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens
+        }
     }
 
     response = requests.post(url, headers=headers, json=payload)
 
     if response.status_code == 200:
-        text = response.text.strip()
-        if not text:
-            return "<p style='color:red;'>Gemini returned an empty response.</p>"
-        return text
+        try:
+            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as e:
+            return f"<p>Parsing error: {e}</p>"
     else:
-        return f"<p style='color:red;'>Gemini API error {response.status_code}: {html.escape(response.text)}</p>"
+        return f"<p>Gemini API error {response.status_code}: {html.escape(response.text)}</p>"
 
 # --- Smart Display ---
 def render_response(response):
