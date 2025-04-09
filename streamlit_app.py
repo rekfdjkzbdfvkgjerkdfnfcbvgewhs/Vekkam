@@ -73,8 +73,20 @@ def gemini_generate(model, prompt, max_tokens, temperature):
         "max_tokens": max_tokens,
         "temperature": temperature
     }
+    
     response = requests.post(url, headers=headers, json=payload)
+    st.write("Response status code:", response.status_code)
+    st.write("Response text:", response.text[:500])  # Show first 500 characters for debug
+    
     if response.status_code == 200:
+        # Check if the response text is empty
+        if not response.text.strip():
+            st.error("Empty response received from the API.")
+            return ""
+        # If the response is HTML, return it or handle accordingly.
+        if response.text.strip().lower().startswith("<!doctype html") or response.text.strip().lower().startswith("<html"):
+            st.warning("Received HTML response instead of JSON.")
+            return response.text.strip()
         try:
             result = response.json()
             return result.get("generated_text", "").strip()
