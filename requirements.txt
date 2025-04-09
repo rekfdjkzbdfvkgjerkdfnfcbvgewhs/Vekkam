@@ -8,3 +8,4 @@ requests
 Pillow
 pytesseract
 python-pptx
+html2text
