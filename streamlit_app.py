@@ -106,10 +106,15 @@ Make the map detailed but concise.
 Text:
 {text}"""
     raw_output = call_gemini(prompt, temperature=0.4)
+
     try:
         match = re.search(r'\{.*\}', raw_output, re.DOTALL)
+        if not match:
+            raise ValueError("No JSON block found in Gemini output.")
+        
         json_str = re.sub(r",\s*([}\]])", r"\1", match.group(0))
         return json.loads(json_str)
+        
     except Exception as e:
         st.error(f"Concept map generation failed: {e}")
         st.code(raw_output)
