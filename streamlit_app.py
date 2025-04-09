@@ -80,6 +80,7 @@ Ensure:
 - Each node has a short but meaningful 'description'
 - Output only valid JSON with nodes and edges
 - Avoid extra commentary or markdown
+- Make the descriptions concise but full of information that may come in a test.
 
 Text:
 {text}
