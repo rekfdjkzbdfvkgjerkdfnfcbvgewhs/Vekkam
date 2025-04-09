@@ -127,13 +127,13 @@ def plot_mind_map(nodes, edges):
     components.html(html_str, height=700, scrolling=True)
 
 # --- AI Learning Aids ---
-def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", temperature=0.5)
-def generate_questions(text): return call_gemini(f"Generate 15 quiz questions:\n\n{text[:4000]}")
-def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text[:4000]}")
-def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text[:4000]}")
-def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text[:4000]}")
-def generate_cheatsheet(text): return call_gemini(f"Create a cheat sheet:\n\n{text[:4000]}")
-def generate_highlights(text): return call_gemini(f"List key facts and highlights:\n\n{text[:4000]}")
+def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", temperature=0.5, max_tokens=8192)
+def generate_questions(text): return call_gemini(f"Generate 15 quiz questions:\n\n{text[:4000]}, max_tokens=8192")
+def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text[:4000]}, max_tokens=8192")
+def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text[:4000]}, max_tokens=8192")
+def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text[:4000]}, max_tokens=8192")
+def generate_cheatsheet(text): return call_gemini(f"Create a cheat sheet:\n\n{text[:4000]}, max_tokens=8192")
+def generate_highlights(text): return call_gemini(f"List key facts and highlights:\n\n{text[:4000]}, max_tokens=8192")
 
 # --- Display Logic ---
 def render_section(title, content):
