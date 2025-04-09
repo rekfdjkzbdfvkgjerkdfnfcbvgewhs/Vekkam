@@ -1,5 +1,4 @@
 import streamlit as st
-import cohere
 import fitz  # PyMuPDF for PDFs
 import docx
 import json
@@ -17,8 +16,8 @@ st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
 st.text("Review summaries, flashcards, cheat sheets, and more to reinforce your learning.")
 
-# --- Load API Clients ---
-co = cohere.Client(st.secrets["cohere_api_key"])
+# --- Load API Keys ---
+GEMINI_API_KEY = st.secrets["gemini_api_key"]
 SERP_API_KEY = st.secrets["serp_api_key"]
 
 # --- File Upload ---
@@ -60,7 +59,30 @@ def extract_text(file):
 
     return ""
 
-# --- Cohere API: Get Concept Map JSON ---
+# --- Gemini API Wrapper using requests ---
+def gemini_generate(model, prompt, max_tokens, temperature):
+    # Adjust the endpoint URL if necessary.
+    url = "https://api.gemini.ai/v1/generate"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {GEMINI_API_KEY}"
+    }
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "max_tokens": max_tokens,
+        "temperature": temperature
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code == 200:
+        result = response.json()
+        # Adjust the key below based on the Gemini API response format.
+        return result.get("generated_text", "").strip()
+    else:
+        st.error(f"Gemini API error: {response.status_code}, {response.text}")
+        return ""
+
+# --- Gemini API: Get Concept Map JSON ---
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a JSON concept map.
 Follow exactly this structure:
@@ -82,17 +104,11 @@ Follow exactly this structure:
     }}
   ]
 }}
-Make the mind map as detailed as possible in terms of scope but keep the definitions concise. They're for an exam. Keep more branches and short definitons.
+Make the mind map as detailed as possible in terms of scope but keep the definitions concise. They're for an exam. Keep more branches and short definitions.
 Text:
 {text}
 """
-    response = co.generate(
-        model="command",
-        prompt=prompt,
-        max_tokens=2000,
-        temperature=0.5
-    )
-    raw_output = response.generations[0].text.strip()
+    raw_output = gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
 
     try:
         match = re.search(r'\{.*\}', raw_output, re.DOTALL)
@@ -174,44 +190,44 @@ def plot_igraph_graph(g):
 
 def generate_summary(text):
     prompt = f"Summarize this for an exam I have: \n\n{text[:4000]}"
-    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
+    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
 
 def generate_questions(text):
     prompt = f"Generate 15 educational quiz questions from the following text:\n\n{text[:4000]}"
-    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
+    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
 
 def generate_flashcards(text):
     prompt = f"""Create flashcards from the following content.
 Each flashcard should have a "question" and an "answer".\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
+    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.7)
 
 def generate_mnemonics(text):
     prompt = f"""Based on the following text, generate mnemonics to help remember the key points.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
+    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.7)
 
 def generate_key_terms(text):
     prompt = f"""Extract 10 key terms from the following text along with a brief definition for each.\n\n{text[:4000]}
 Text:
 {text[:4000]}
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
+    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=1500, temperature=0.7)
 
 def generate_cheatsheet(text):
     prompt = f"""Generate a cheat sheet from the following content.
 Include bullet points for essential facts, formulas, and definitions that a student should quickly review.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
+    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.7)
 
 def generate_highlights(text):
     prompt = f"""Identify and list key sentences or statements from the following text that best summarize the most important points.\n\n{text[:4000]}
 Text:
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
+    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.7)
 
 # --- Process Each File ---
 def process_file(file):
@@ -294,7 +310,7 @@ Context: {context}
 
 Include examples and, if needed, LaTeX for mathematical expressions.
 """
-    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.5).generations[0].text.strip()
+    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
 
 def display_answer(answer):
     try:
