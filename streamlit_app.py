@@ -47,7 +47,7 @@ def extract_text(file):
         return pytesseract.image_to_string(Image.open(file))
     return ""
 
-# --- Gemini API Call (via Vekkam Endpoint) ---
+# --- Gemini API Call ---
 def call_gemini(prompt, temperature=0.7, max_tokens=2048):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
@@ -77,55 +77,40 @@ def render_response(response):
     else:
         st.markdown(response, unsafe_allow_html=True)
 
-# --- Concept Map via Gemini ---
-def get_concept_map(text):
-    prompt = f"""You are an AI that creates a concept map in HTML format.
-The HTML should contain:
-- A main title for the topic
-- Sections for each subtopic with their own children listed
-- Use <h2>, <h3>, <ul>, <li> etc. for structure
-- Avoid inline styles; use clean semantic HTML
-- Do not include JSON or markdown
+# --- Concept Map via JSON (for Plotly) ---
+def get_mind_map_graph(text):
+    prompt = f"""You are a helpful assistant that creates mind map structures from user input.
+
+Based on the following content, generate a JSON object with:
+- "nodes": a list of nodes, each with a unique "id" and a "label"
+- "edges": a list of relationships, each with a "source" and "target" id referencing the node IDs
+
+Only output valid JSON. No markdown, explanation, or comments.
 
 Text:
 {text}
 """
     raw_output = call_gemini(prompt, temperature=0.4)
-
-    if not raw_output:
-        st.error("Concept map generation failed: No response from Gemini.")
+    try:
+        match = re.search(r'\{.*\}', raw_output, re.DOTALL)
+        if not match:
+            raise ValueError("No valid JSON structure found.")
+        json_str = re.sub(r",\s*([}\]])", r"\1", match.group(0))  # Clean trailing commas
+        return json.loads(json_str)
+    except Exception as e:
+        st.error(f"Parsing Gemini mind map JSON failed: {e}")
+        st.code(raw_output)
         return None
 
-    return raw_output.strip()
+def plot_mind_map(nodes, edges):
+    id_to_index = {node['id']: i for i, node in enumerate(nodes)}
 
-# --- Build and Plot Mind Map ---
-def build_igraph_graph(concept_json):
-    vertices, edges = [], []
-
-    def walk(node, parent_id=None):
-        node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
-        vertices.append({"id": node_id, "label": node["title"], "description": node.get("description", "")})
-        if parent_id:
-            edges.append((parent_id, node_id))
-        for child in node.get("children", []):
-            walk(child, node_id)
-
-    root = {
-        "title": concept_json["topic"]["title"],
-        "description": concept_json["topic"].get("description", ""),
-        "children": concept_json.get("subtopics", [])
-    }
-    walk(root)
     g = ig.Graph(directed=True)
-    g.add_vertices([v["id"] for v in vertices])
-    g.vs["label"] = [v["label"] for v in vertices]
-    g.vs["description"] = [v["description"] for v in vertices]
-    if edges:
-        g.add_edges(edges)
-    return g
+    g.add_vertices(len(nodes))
+    g.add_edges([(id_to_index[e['source']], id_to_index[e['target']]) for e in edges])
 
-def plot_igraph_graph(g):
     layout = g.layout("fr")
+
     edge_x, edge_y = [], []
     for e in g.es:
         x0, y0 = layout[e.source]
@@ -134,21 +119,30 @@ def plot_igraph_graph(g):
         edge_y += [y0, y1, None]
 
     edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
-    node_x, node_y, texts = [], [], []
-    for i, v in enumerate(g.vs):
+
+    node_x, node_y, labels = [], [], []
+    for i, node in enumerate(nodes):
         x, y = layout[i]
         node_x.append(x)
         node_y.append(y)
-        texts.append(f"<b>{v['label']}</b><br>{v['description']}")
+        labels.append(f"<b>{node['label']}</b>")
+
     node_trace = go.Scatter(
-        x=node_x, y=node_y, mode='markers+text', text=g.vs["label"],
+        x=node_x, y=node_y, mode='markers+text',
+        text=[node["label"] for node in nodes],
         textposition="top center", marker=dict(size=20, color='#00cc96', line_width=2),
-        hoverinfo='text', hovertext=texts
+        hoverinfo='text', hovertext=labels
     )
-    return go.Figure(data=[edge_trace, node_trace],
-                     layout=go.Layout(title="Interactive Mind Map", hovermode='closest',
-                                      xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                                      yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
+
+    fig = go.Figure(data=[edge_trace, node_trace],
+        layout=go.Layout(
+            title="🌐 Gemini-Generated Mind Map",
+            hovermode='closest',
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+        )
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 # --- Study Aids ---
 def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", temperature=0.5)
@@ -165,7 +159,7 @@ def process_file(file):
     return {
         "name": file.name,
         "text": text,
-        "concept_map": get_concept_map(text),
+        "mind_map": get_mind_map_graph(text),
         "summary": generate_summary(text),
         "questions": generate_questions(text),
         "flashcards": generate_flashcards(text),
@@ -182,12 +176,11 @@ if uploaded_files:
             result = process_file(file)
             st.markdown(f"---\n## Document: {result['name']}")
 
-            if result["concept_map"]:
-                st.subheader("🧠 Concept Map")
-                render_response(result["concept_map"])
+            if result["mind_map"]:
+                st.subheader("🧠 Mind Map")
+                plot_mind_map(result["mind_map"]["nodes"], result["mind_map"]["edges"])
             else:
-                st.error("Concept map generation failed.")
-
+                st.error("Mind map generation failed.")
 
             st.subheader("📌 Summary")
             render_response(result["summary"])
