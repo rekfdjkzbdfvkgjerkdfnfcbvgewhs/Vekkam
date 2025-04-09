@@ -108,7 +108,6 @@ Text:
         return data
     except Exception as e:
         st.error(f"Concept map generation failed: {e}")
-        st.code(raw_output)
         return None
 
 # --- Build and Plot Graph ---
