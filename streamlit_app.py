@@ -1,8 +1,8 @@
 import streamlit as st
+import cohere
 import fitz  # PyMuPDF for PDFs
 import docx
 import json
-import html2text
 import re
 from io import StringIO
 from PIL import Image
@@ -11,15 +11,14 @@ import plotly.graph_objects as go
 import igraph as ig
 import requests
 from pptx import Presentation  # For PPTX support
-import streamlit.components.v1 as components
 
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.title("Vekkam - the Study Buddy of Your Dreams")
 st.text("Review summaries, flashcards, cheat sheets, and more to reinforce your learning.")
 
-# --- Load API Keys ---
-GEMINI_API_KEY = st.secrets["gemini_api_key"]
+# --- Load API Clients ---
+co = cohere.Client(st.secrets["cohere_api_key"])
 SERP_API_KEY = st.secrets["serp_api_key"]
 
 # --- File Upload ---
@@ -61,34 +60,7 @@ def extract_text(file):
 
     return ""
 
-# --- Gemini API Wrapper using requests with new endpoint ---
-def gemini_generate(model, prompt, max_tokens, temperature):
-    url = "https://vekkam.streamlit.app/"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GEMINI_API_KEY}"
-    }
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "max_tokens": max_tokens,
-        "temperature": temperature
-    }
-    
-    response = requests.post(url, headers=headers, json=payload)
-    st.write("Response status code:", response.status_code)
-    st.write("Raw response text:", response.text)
-    
-    if response.status_code == 200:
-        content = response.text.strip()
-        # Convert HTML to Markdown using html2text
-        markdown_text = html2text.html2text(content)
-        return markdown_text.strip()
-    else:
-        st.error(f"Gemini API error: {response.status_code}, {response.text}")
-        return ""
-
-# --- Gemini API: Get Concept Map JSON ---
+# --- Cohere API: Get Concept Map JSON ---
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a JSON concept map.
 Follow exactly this structure:
@@ -110,14 +82,17 @@ Follow exactly this structure:
     }}
   ]
 }}
-Make the mind map as detailed as possible in terms of scope but keep the definitions concise.
-They're for an exam. Keep more branches and short definitions.
+Make the mind map as detailed as possible in terms of scope but keep the definitions concise. They're for an exam. Keep more branches and short definitons.
 Text:
 {text}
 """
-    raw_output = gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
-    
-    st.write("Raw output from Gemini:", raw_output)  # Debug output
+    response = co.generate(
+        model="command",
+        prompt=prompt,
+        max_tokens=2000,
+        temperature=0.5
+    )
+    raw_output = response.generations[0].text.strip()
 
     try:
         match = re.search(r'\{.*\}', raw_output, re.DOTALL)
@@ -199,44 +174,44 @@ def plot_igraph_graph(g):
 
 def generate_summary(text):
     prompt = f"Summarize this for an exam I have: \n\n{text[:4000]}"
-    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
+    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
 
 def generate_questions(text):
     prompt = f"Generate 15 educational quiz questions from the following text:\n\n{text[:4000]}"
-    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
+    return co.generate(model="command", prompt=prompt, max_tokens=2000).generations[0].text.strip()
 
 def generate_flashcards(text):
     prompt = f"""Create flashcards from the following content.
 Each flashcard should have a "question" and an "answer".\n\n{text[:4000]}
 Text:
 """
-    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.7)
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_mnemonics(text):
     prompt = f"""Based on the following text, generate mnemonics to help remember the key points.\n\n{text[:4000]}
 Text:
 """
-    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.7)
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_key_terms(text):
     prompt = f"""Extract 10 key terms from the following text along with a brief definition for each.\n\n{text[:4000]}
 Text:
 {text[:4000]}
 """
-    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=1500, temperature=0.7)
+    return co.generate(model="command", prompt=prompt, max_tokens=1500, temperature=0.7).generations[0].text.strip()
 
 def generate_cheatsheet(text):
     prompt = f"""Generate a cheat sheet from the following content.
 Include bullet points for essential facts, formulas, and definitions that a student should quickly review.\n\n{text[:4000]}
 Text:
 """
-    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.7)
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 def generate_highlights(text):
     prompt = f"""Identify and list key sentences or statements from the following text that best summarize the most important points.\n\n{text[:4000]}
 Text:
 """
-    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.7)
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.7).generations[0].text.strip()
 
 # --- Process Each File ---
 def process_file(file):
@@ -270,21 +245,21 @@ if uploaded_files:
 
             # Display Summary and Quiz Questions
             st.subheader("📌 Summary")
-            st.markdown(summary, unsafe_allow_html=True)
+            st.markdown(summary)
             st.subheader("📝 Quiz Questions")
-            st.markdown(questions, unsafe_allow_html=True)
+            st.markdown(questions)
 
             # Display Additional Memory Aids
             with st.expander("Flashcards"):
-                st.markdown(flashcards, unsafe_allow_html=True)
+                st.markdown(flashcards)
             with st.expander("Mnemonics"):
-                st.markdown(mnemonics, unsafe_allow_html=True)
+                st.markdown(mnemonics)
             with st.expander("Key Terms"):
-                st.markdown(key_terms, unsafe_allow_html=True)
+                st.markdown(key_terms)
             with st.expander("Cheat Sheet"):
-                st.markdown(cheatsheet, unsafe_allow_html=True)
+                st.markdown(cheatsheet)
             with st.expander("Highlighted Key Points"):
-                st.markdown(highlights, unsafe_allow_html=True)
+                st.markdown(highlights)
 else:
     st.info("Upload documents above to begin.")
 
@@ -319,23 +294,26 @@ Context: {context}
 
 Include examples and, if needed, LaTeX for mathematical expressions.
 """
-    return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
+    return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.5).generations[0].text.strip()
 
 def display_answer(answer):
-    # First, try to see if the answer is valid JSON and render that.
     try:
         st.json(json.loads(answer))
         return
     except json.JSONDecodeError:
-        # Not valid JSON, so we'll proceed.
         pass
-
-    # Check if the response appears to be HTML.
-    answer_strip = answer.strip().lower()
-    if answer_strip.startswith("<html") or answer_strip.startswith("<!doctype html"):
-        # Render the HTML response using components.html.
-        # You can adjust the height and scrolling parameters as needed.
-        components.html(answer, height=800, scrolling=True)
-    else:
-        # Otherwise, display using markdown (with unsafe HTML allowed).
+    if re.search(r'<[^>]+>', answer):
         st.markdown(answer, unsafe_allow_html=True)
+    elif answer.strip().startswith(r"\min"):
+        st.latex(answer.strip())
+    elif (matrix := re.search(r"(\\left\(.*?\\right\))", answer, re.DOTALL)):
+        st.markdown(answer.replace(matrix.group(1), ""))
+        st.latex(matrix.group(1))
+    else:
+        st.markdown(answer)
+
+if st.button("Get Answer") and doubt_text:
+    with st.spinner("🔍 Searching for context and generating answer..."):
+        answer = answer_doubt(doubt_text)
+    st.subheader("Answer")
+    display_answer(answer)
