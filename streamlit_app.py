@@ -59,9 +59,8 @@ def extract_text(file):
 
     return ""
 
-# --- Gemini API Wrapper using requests ---
+# --- Gemini API Wrapper using requests with new endpoint ---
 def gemini_generate(model, prompt, max_tokens, temperature):
-    # Adjust the endpoint URL if necessary.
     url = "https://vekkam.streamlit.app/"
     headers = {
         "Content-Type": "application/json",
@@ -75,9 +74,13 @@ def gemini_generate(model, prompt, max_tokens, temperature):
     }
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
-        result = response.json()
-        # Adjust the key below based on the Gemini API response format.
-        return result.get("generated_text", "").strip()
+        try:
+            result = response.json()
+            return result.get("generated_text", "").strip()
+        except json.JSONDecodeError as e:
+            st.error("JSON decode error: " + str(e))
+            st.write("Response text:", response.text)
+            return ""
     else:
         st.error(f"Gemini API error: {response.status_code}, {response.text}")
         return ""
@@ -104,11 +107,14 @@ Follow exactly this structure:
     }}
   ]
 }}
-Make the mind map as detailed as possible in terms of scope but keep the definitions concise. They're for an exam. Keep more branches and short definitions.
+Make the mind map as detailed as possible in terms of scope but keep the definitions concise.
+They're for an exam. Keep more branches and short definitions.
 Text:
 {text}
 """
     raw_output = gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
+    
+    st.write("Raw output from Gemini:", raw_output)  # Debug output
 
     try:
         match = re.search(r'\{.*\}', raw_output, re.DOTALL)
