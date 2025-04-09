@@ -10,24 +10,23 @@ import pytesseract
 import plotly.graph_objects as go
 import igraph as ig
 import requests
-from pptx import Presentation  # For PPTX support
+from pptx import Presentation
+import streamlit.components.v1 as components
 
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 
-# Custom HTML Banner
-st.html(
-    """
-    <div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
-        <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
-    </div>
-    """
-)
+# --- Custom HTML Banner ---
+st.html("""
+<div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
+    <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
+</div>
+""")
 
 st.title("Vekkam - the Study Buddy of Your Dreams")
 st.text("Review summaries, flashcards, cheat sheets, and more to reinforce your learning.")
 
-# --- Load API Clients ---
+# --- API Setup ---
 co = cohere.Client(st.secrets["cohere_api_key"])
 SERP_API_KEY = st.secrets["serp_api_key"]
 
@@ -38,6 +37,14 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
+# --- Utility: Render response as HTML or Markdown ---
+def render_response(response):
+    response = response.strip()
+    if response.lower().startswith("<!doctype html") or response.lower().startswith("<html"):
+        components.html(response, height=800, scrolling=True)
+    else:
+        st.markdown(response, unsafe_allow_html=True)
+
 # --- Text Extraction ---
 def extract_text(file):
     ext = file.name.lower()
@@ -47,11 +54,9 @@ def extract_text(file):
             for page in doc:
                 text += page.get_text()
         return text
-
     elif ext.endswith(".docx"):
         doc_obj = docx.Document(file)
         return "\n".join([p.text for p in doc_obj.paragraphs])
-
     elif ext.endswith(".pptx"):
         prs = Presentation(file)
         text = ""
@@ -60,17 +65,14 @@ def extract_text(file):
                 if hasattr(shape, "text"):
                     text += shape.text + "\n"
         return text
-
     elif ext.endswith(".txt"):
         return StringIO(file.getvalue().decode("utf-8")).read()
-
     elif ext.endswith((".jpg", ".jpeg", ".png")):
         image = Image.open(file)
         return pytesseract.image_to_string(image)
-
     return ""
 
-# --- Cohere API: Get Concept Map JSON ---
+# --- Cohere Concept Map Generator ---
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a JSON concept map.
 Follow exactly this structure:
@@ -92,18 +94,13 @@ Follow exactly this structure:
     }}
   ]
 }}
-Make the mind map as detailed as possible in terms of scope but keep the definitions concise. They're for an exam. Keep more branches and short definitons.
+Make the mind map as detailed as possible in terms of scope but keep the definitions concise.
+They're for an exam. Keep more branches and short definitions.
 Text:
 {text}
 """
-    response = co.generate(
-        model="command",
-        prompt=prompt,
-        max_tokens=2000,
-        temperature=0.5
-    )
+    response = co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=0.5)
     raw_output = response.generations[0].text.strip()
-
     try:
         match = re.search(r'\{.*\}', raw_output, re.DOTALL)
         if not match:
@@ -121,15 +118,13 @@ Text:
         st.code(raw_output)
         return None
 
-# --- Build and Plot Graph ---
+# --- Graph Builder ---
 def build_igraph_graph(concept_json):
-    vertices = []
-    edges = []
+    vertices, edges = [], []
 
     def walk(node, parent_id=None):
         node_id = f"{node['title'].replace(' ', '_')}_{len(vertices)}"
-        description = node.get("description", "")
-        vertices.append({"id": node_id, "label": node["title"], "description": description})
+        vertices.append({"id": node_id, "label": node["title"], "description": node.get("description", "")})
         if parent_id:
             edges.append((parent_id, node_id))
         for child in node.get("children", []):
@@ -143,8 +138,7 @@ def build_igraph_graph(concept_json):
     walk(root)
     g = ig.Graph(directed=True)
     g.add_vertices([v["id"] for v in vertices])
-    g.vs["label"] = [v["label"] for v in vertices]
-    g.vs["description"] = [v["description"] for v in vertices]
+    g.vs["label"], g.vs["description"] = [v["label"] for v in vertices], [v["description"] for v in vertices]
     if edges:
         g.add_edges(edges)
     return g
@@ -157,62 +151,43 @@ def plot_igraph_graph(g):
         x1, y1 = layout[e.target]
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
-
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines',
-                            line=dict(width=1, color='#888'), hoverinfo='none')
-
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
     node_x, node_y, texts = [], [], []
     for i, v in enumerate(g.vs):
         x, y = layout[i]
         node_x.append(x)
         node_y.append(y)
         texts.append(f"<b>{v['label']}</b><br>{v['description']}")
-
     node_trace = go.Scatter(
         x=node_x, y=node_y, mode='markers+text', text=g.vs["label"],
-        textposition="top center",
-        marker=dict(size=20, color='#00cc96', line_width=2),
+        textposition="top center", marker=dict(size=20, color='#00cc96', line_width=2),
         hoverinfo='text', hovertext=texts
     )
-
     return go.Figure(data=[edge_trace, node_trace],
                      layout=go.Layout(title="Interactive Mind Map", hovermode='closest',
                                       xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                                       yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
 
-# --- Additional Memory Aids ---
+# --- Cohere Generator ---
 def call_cohere(prompt, temperature=0.7):
     return co.generate(model="command", prompt=prompt, max_tokens=2000, temperature=temperature).generations[0].text.strip()
 
-def generate_summary(text):
-    return call_cohere(f"Summarize this for an exam I have:\n\n{text[:4000]}", temperature=0.5)
+# --- AI Features ---
+def generate_summary(text): return call_cohere(f"Summarize this for an exam I have:\n\n{text[:4000]}", temperature=0.5)
+def generate_questions(text): return call_cohere(f"Generate 15 educational quiz questions:\n\n{text[:4000]}", temperature=0.5)
+def generate_flashcards(text): return call_cohere(f"Create flashcards with Q&A:\n\n{text[:4000]}")
+def generate_mnemonics(text): return call_cohere(f"Generate mnemonics for this content:\n\n{text[:4000]}")
+def generate_key_terms(text): return call_cohere(f"Extract 10 key terms and their definitions:\n\n{text[:4000]}", temperature=0.6)
+def generate_cheatsheet(text): return call_cohere(f"Create a cheat sheet with bullets:\n\n{text[:4000]}", temperature=0.7)
+def generate_highlights(text): return call_cohere(f"List key sentences summarizing the text:\n\n{text[:4000]}")
 
-def generate_questions(text):
-    return call_cohere(f"Generate 15 educational quiz questions from the following text:\n\n{text[:4000]}", temperature=0.5)
-
-def generate_flashcards(text):
-    return call_cohere(f"Create flashcards with question and answer format:\n\n{text[:4000]}")
-
-def generate_mnemonics(text):
-    return call_cohere(f"Generate mnemonics to help remember the key points:\n\n{text[:4000]}")
-
-def generate_key_terms(text):
-    return call_cohere(f"Extract 10 key terms with definitions from:\n\n{text[:4000]}", temperature=0.6)
-
-def generate_cheatsheet(text):
-    return call_cohere(f"Generate a cheat sheet from this content:\n\n{text[:4000]}", temperature=0.7)
-
-def generate_highlights(text):
-    return call_cohere(f"List key sentences or statements that summarize the main points:\n\n{text[:4000]}")
-
-# --- Main File Processor ---
+# --- Process File ---
 def process_file(file):
     text = extract_text(file)
-    concept_json = get_concept_map(text)
     return {
         "name": file.name,
         "text": text,
-        "concept_map": concept_json,
+        "concept_map": get_concept_map(text),
         "summary": generate_summary(text),
         "questions": generate_questions(text),
         "flashcards": generate_flashcards(text),
@@ -222,7 +197,7 @@ def process_file(file):
         "highlights": generate_highlights(text)
     }
 
-# --- Render Results ---
+# --- Main Logic ---
 if uploaded_files:
     for file in uploaded_files:
         with st.spinner(f"Processing: {file.name}"):
@@ -237,20 +212,20 @@ if uploaded_files:
                 st.error("Concept map generation failed.")
 
             st.subheader("📌 Summary")
-            st.markdown(result["summary"])
+            render_response(result["summary"])
 
             st.subheader("📝 Quiz Questions")
-            st.markdown(result["questions"])
+            render_response(result["questions"])
 
             with st.expander("Flashcards"):
-                st.markdown(result["flashcards"])
+                render_response(result["flashcards"])
             with st.expander("Mnemonics"):
-                st.markdown(result["mnemonics"])
+                render_response(result["mnemonics"])
             with st.expander("Key Terms"):
-                st.markdown(result["key_terms"])
+                render_response(result["key_terms"])
             with st.expander("Cheat Sheet"):
-                st.markdown(result["cheatsheet"])
+                render_response(result["cheatsheet"])
             with st.expander("Highlighted Key Points"):
-                st.markdown(result["highlights"])
+                render_response(result["highlights"])
 else:
     st.info("Upload documents above to begin.")
