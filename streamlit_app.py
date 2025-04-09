@@ -3,7 +3,6 @@ import fitz  # PyMuPDF
 import docx
 import json
 import re
-import html
 from io import StringIO
 from PIL import Image
 import pytesseract
@@ -15,13 +14,14 @@ import streamlit.components.v1 as components
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
-st.html("""
-<div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
-    <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
-</div>
-""")
+st.markdown("""
+    <div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
+        <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
+    </div>
+""", unsafe_allow_html=True)
+
 st.title("Vekkam - the Study Buddy of Your Dreams")
-st.text("Review summaries, flashcards, cheat sheets, and more to reinforce your learning.")
+st.info("Upload files to generate summaries, mind maps, flashcards, and more.")
 
 # --- File Upload ---
 uploaded_files = st.file_uploader(
@@ -35,12 +35,11 @@ def extract_text(file):
     ext = file.name.lower()
     if ext.endswith(".pdf"):
         with fitz.open(stream=file.read(), filetype="pdf") as doc:
-            return "".join(page.get_text() for page in doc)
+            return "".join([page.get_text() for page in doc])
     elif ext.endswith(".docx"):
         return "\n".join(p.text for p in docx.Document(file).paragraphs)
     elif ext.endswith(".pptx"):
-        prs = Presentation(file)
-        return "\n".join(shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, "text"))
+        return "\n".join(shape.text for slide in Presentation(file).slides for shape in slide.shapes if hasattr(shape, "text"))
     elif ext.endswith(".txt"):
         return StringIO(file.getvalue().decode("utf-8")).read()
     elif ext.endswith((".jpg", ".jpeg", ".png")):
@@ -58,57 +57,43 @@ def call_gemini(prompt, temperature=0.7, max_tokens=2048):
             "maxOutputTokens": max_tokens
         }
     }
-
-    response = requests.post(url, headers=headers, json=payload)
-
-    if response.status_code == 200:
+    res = requests.post(url, headers=headers, json=payload)
+    if res.status_code == 200:
         try:
-            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+            return res.json()["candidates"][0]["content"]["parts"][0]["text"]
         except Exception as e:
-            return f"<p>Parsing error: {e}</p>"
-    else:
-        return f"<p>Gemini API error {response.status_code}: {html.escape(response.text)}</p>"
+            return f"<p>Error parsing response: {e}</p>"
+    return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
-# --- Smart Display ---
-def render_response(response):
-    response = response.strip()
-    if response.lower().startswith("<!doctype html") or response.lower().startswith("<html"):
-        components.html(response, height=800, scrolling=True)
-    else:
-        st.markdown(response, unsafe_allow_html=True)
+# --- Generate Mind Map JSON ---
+def get_mind_map(text):
+    prompt = f"""
+You are a mind map generator. Based on this content, return JSON with:
+- nodes: each node has an "id" and "label"
+- edges: each edge has "source" and "target" node IDs
 
-# --- Concept Map via JSON (for Plotly) ---
-def get_mind_map_graph(text):
-    prompt = f"""You are a helpful assistant that creates mind map structures from user input.
-
-Based on the following content, generate a JSON object with:
-- "nodes": a list of nodes, each with a unique "id" and a "label"
-- "edges": a list of relationships, each with a "source" and "target" id referencing the node IDs
-
-Only output valid JSON. No markdown, explanation, or comments.
+Only output raw JSON.
 
 Text:
 {text}
 """
-    raw_output = call_gemini(prompt, temperature=0.4)
+    response = call_gemini(prompt, temperature=0.4)
     try:
-        match = re.search(r'\{.*\}', raw_output, re.DOTALL)
-        if not match:
-            raise ValueError("No valid JSON structure found.")
-        json_str = re.sub(r",\s*([}\]])", r"\1", match.group(0))  # Clean trailing commas
-        return json.loads(json_str)
+        json_data = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_data:
+            cleaned = re.sub(r",\s*([}\]])", r"\1", json_data.group(0))
+            return json.loads(cleaned)
     except Exception as e:
-        st.error(f"Parsing Gemini mind map JSON failed: {e}")
-        st.code(raw_output)
-        return None
+        st.error(f"Failed to parse JSON: {e}")
+        st.code(response)
+    return None
 
+# --- Plot Mind Map with Plotly Export ---
 def plot_mind_map(nodes, edges):
     id_to_index = {node['id']: i for i, node in enumerate(nodes)}
-
     g = ig.Graph(directed=True)
     g.add_vertices(len(nodes))
     g.add_edges([(id_to_index[e['source']], id_to_index[e['target']]) for e in edges])
-
     layout = g.layout("fr")
 
     edge_x, edge_y = [], []
@@ -118,85 +103,79 @@ def plot_mind_map(nodes, edges):
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
 
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
-
     node_x, node_y, labels = [], [], []
-    for i, node in enumerate(nodes):
+    for i, v in enumerate(g.vs):
         x, y = layout[i]
         node_x.append(x)
         node_y.append(y)
-        labels.append(f"<b>{node['label']}</b>")
+        labels.append(f"<b>{nodes[i]['label']}</b>")
 
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
     node_trace = go.Scatter(
-        x=node_x, y=node_y, mode='markers+text',
-        text=[node["label"] for node in nodes],
+        x=node_x, y=node_y, mode='markers+text', text=[n['label'] for n in nodes],
         textposition="top center", marker=dict(size=20, color='#00cc96', line_width=2),
         hoverinfo='text', hovertext=labels
     )
 
-    fig = go.Figure(data=[edge_trace, node_trace],
-        layout=go.Layout(
-            title="🌐 Gemini-Generated Mind Map",
-            hovermode='closest',
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
-        )
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
+        title="🧠 Mind Map", hovermode='closest',
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+    ))
 
-# --- Study Aids ---
+    html_str = fig.to_html(full_html=False, include_plotlyjs='cdn')
+    components.html(html_str, height=700, scrolling=True)
+
+# --- AI Learning Aids ---
 def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", temperature=0.5)
-def generate_questions(text): return call_gemini(f"Generate 15 educational quiz questions:\n\n{text[:4000]}", temperature=0.5)
+def generate_questions(text): return call_gemini(f"Generate 15 quiz questions:\n\n{text[:4000]}")
 def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text[:4000]}")
 def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text[:4000]}")
-def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text[:4000]}", temperature=0.6)
-def generate_cheatsheet(text): return call_gemini(f"Create a bullet-point cheat sheet:\n\n{text[:4000]}", temperature=0.7)
-def generate_highlights(text): return call_gemini(f"List key points and important facts:\n\n{text[:4000]}")
+def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text[:4000]}")
+def generate_cheatsheet(text): return call_gemini(f"Create a cheat sheet:\n\n{text[:4000]}")
+def generate_highlights(text): return call_gemini(f"List key facts and highlights:\n\n{text[:4000]}")
 
-# --- File Processor ---
-def process_file(file):
-    text = extract_text(file)
-    return {
-        "name": file.name,
-        "text": text,
-        "mind_map": get_mind_map_graph(text),
-        "summary": generate_summary(text),
-        "questions": generate_questions(text),
-        "flashcards": generate_flashcards(text),
-        "mnemonics": generate_mnemonics(text),
-        "key_terms": generate_key_terms(text),
-        "cheatsheet": generate_cheatsheet(text),
-        "highlights": generate_highlights(text)
-    }
+# --- Display Logic ---
+def render_section(title, content):
+    st.subheader(title)
+    if content.strip().startswith("<"):
+        components.html(content, height=600, scrolling=True)
+    else:
+        st.markdown(content, unsafe_allow_html=True)
 
-# --- Main App Logic ---
+# --- Main Execution ---
 if uploaded_files:
     for file in uploaded_files:
-        with st.spinner(f"Processing: {file.name}"):
-            result = process_file(file)
-            st.markdown(f"---\n## Document: {result['name']}")
+        with st.spinner(f"Processing {file.name}..."):
+            text = extract_text(file)
+            mind_map = get_mind_map(text)
+            summary = generate_summary(text)
+            questions = generate_questions(text)
+            flashcards = generate_flashcards(text)
+            mnemonics = generate_mnemonics(text)
+            key_terms = generate_key_terms(text)
+            cheatsheet = generate_cheatsheet(text)
+            highlights = generate_highlights(text)
 
-            if result["mind_map"]:
-                st.subheader("🧠 Mind Map")
-                plot_mind_map(result["mind_map"]["nodes"], result["mind_map"]["edges"])
-            else:
-                st.error("Mind map generation failed.")
+        st.markdown(f"---\n## 📄 {file.name}")
+        if mind_map:
+            st.subheader("🧠 Mind Map")
+            plot_mind_map(mind_map["nodes"], mind_map["edges"])
+        else:
+            st.error("Mind map generation failed.")
 
-            st.subheader("📌 Summary")
-            render_response(result["summary"])
+        render_section("📌 Summary", summary)
+        render_section("📝 Quiz Questions", questions)
 
-            st.subheader("📝 Quiz Questions")
-            render_response(result["questions"])
-
-            with st.expander("Flashcards"):
-                render_response(result["flashcards"])
-            with st.expander("Mnemonics"):
-                render_response(result["mnemonics"])
-            with st.expander("Key Terms"):
-                render_response(result["key_terms"])
-            with st.expander("Cheat Sheet"):
-                render_response(result["cheatsheet"])
-            with st.expander("Highlighted Key Points"):
-                render_response(result["highlights"])
+        with st.expander("Flashcards"):
+            render_section("📚 Flashcards", flashcards)
+        with st.expander("Mnemonics"):
+            render_section("🧠 Mnemonics", mnemonics)
+        with st.expander("Key Terms"):
+            render_section("🔑 Key Terms", key_terms)
+        with st.expander("Cheat Sheet"):
+            render_section("📋 Cheat Sheet", cheatsheet)
+        with st.expander("Highlights"):
+            render_section("⭐ Highlights", highlights)
 else:
-    st.info("Upload documents above to begin.")
+    st.info("Upload a document to get started.")
