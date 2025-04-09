@@ -2,6 +2,7 @@ import streamlit as st
 import fitz  # PyMuPDF for PDFs
 import docx
 import json
+import html2text
 import re
 from io import StringIO
 from PIL import Image
@@ -76,24 +77,24 @@ def gemini_generate(model, prompt, max_tokens, temperature):
     
     response = requests.post(url, headers=headers, json=payload)
     st.write("Response status code:", response.status_code)
-    st.write("Response text:", response.text[:500])  # Show first 500 characters for debug
+    st.write("Raw response text:", response.text)
     
     if response.status_code == 200:
-        # Check if the response text is empty
-        if not response.text.strip():
-            st.error("Empty response received from the API.")
-            return ""
-        # If the response is HTML, return it or handle accordingly.
-        if response.text.strip().lower().startswith("<!doctype html") or response.text.strip().lower().startswith("<html"):
-            st.warning("Received HTML response instead of JSON.")
-            return response.text.strip()
-        try:
-            result = response.json()
-            return result.get("generated_text", "").strip()
-        except json.JSONDecodeError as e:
-            st.error("JSON decode error: " + str(e))
-            st.write("Response text:", response.text)
-            return ""
+        content = response.text.strip()
+        # If the response seems to be HTML, convert it to Markdown
+        if content.lower().startswith("<!doctype html") or content.lower().startswith("<html"):
+            # Convert HTML to Markdown using html2text
+            markdown_text = html2text.html2text(content)
+            # Optionally, wrap the markdown text in a JSON structure similar to what you'd expect
+            return json.dumps({"generated_text": markdown_text.strip()})
+        else:
+            try:
+                result = response.json()
+                return result.get("generated_text", "").strip()
+            except json.JSONDecodeError as e:
+                st.error("JSON decode error: " + str(e))
+                st.write("Response text:", response.text)
+                return ""
     else:
         st.error(f"Gemini API error: {response.status_code}, {response.text}")
         return ""
