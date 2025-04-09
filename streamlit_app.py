@@ -72,7 +72,7 @@ You are a mind map generator. Based on this content, return JSON with:
 - nodes: each node has an "id" and "label"
 - edges: each edge has "source" and "target" node IDs
 
-Only output raw JSON.
+Only output raw JSON. No additional Text. Keep is concise yet covering all concepts. I need to prepare this presentation thoroughly for my exam.
 
 Text:
 {text}
