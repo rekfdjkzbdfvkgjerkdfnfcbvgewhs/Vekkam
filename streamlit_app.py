@@ -94,37 +94,47 @@ def plot_mind_map(nodes, edges):
     g = ig.Graph(directed=True)
     g.add_vertices(len(nodes))
     g.add_edges([(id_to_index[e['source']], id_to_index[e['target']]) for e in edges])
-    layout = g.layout("fr")
+
+    # Use Kamada-Kawai layout for better spacing
+    layout = g.layout("kk")
+    scale = 3  # Scale to increase distance between nodes
 
     edge_x, edge_y = [], []
     for e in g.es:
         x0, y0 = layout[e.source]
         x1, y1 = layout[e.target]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
+        edge_x += [x0 * scale, x1 * scale, None]
+        edge_y += [y0 * scale, y1 * scale, None]
 
     node_x, node_y, labels = [], [], []
     for i, v in enumerate(g.vs):
         x, y = layout[i]
-        node_x.append(x)
-        node_y.append(y)
+        node_x.append(x * scale)
+        node_y.append(y * scale)
         labels.append(f"<b>{nodes[i]['label']}</b>")
 
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines',
+                            line=dict(width=1, color='#888'), hoverinfo='none')
+
     node_trace = go.Scatter(
         x=node_x, y=node_y, mode='markers+text', text=[n['label'] for n in nodes],
         textposition="top center", marker=dict(size=20, color='#00cc96', line_width=2),
         hoverinfo='text', hovertext=labels
     )
 
-    fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
-        title="🧠 Mind Map", hovermode='closest',
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
-    ))
+    fig = go.Figure(
+        data=[edge_trace, node_trace],
+        layout=go.Layout(
+            title="🧠 Gemini-Generated Mind Map",
+            width=1200, height=800,  # High resolution
+            hovermode='closest',
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+        )
+    )
 
     html_str = fig.to_html(full_html=False, include_plotlyjs='cdn')
-    components.html(html_str, height=700, scrolling=True)
+    components.html(html_str, height=900, scrolling=True)
 
 # --- AI Learning Aids ---
 def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", temperature=0.5, max_tokens=8192)
