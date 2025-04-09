@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import igraph as ig
 import requests
 from pptx import Presentation  # For PPTX support
+import streamlit.components.v1 as components
 
 # --- Page Config ---
 st.set_page_config(page_title="Vekkam", layout="wide")
@@ -267,21 +268,21 @@ if uploaded_files:
 
             # Display Summary and Quiz Questions
             st.subheader("📌 Summary")
-            st.markdown(summary)
+            st.markdown(summary, unsafe_allow_html=True)
             st.subheader("📝 Quiz Questions")
-            st.markdown(questions)
+            st.markdown(questions, unsafe_allow_html=True)
 
             # Display Additional Memory Aids
             with st.expander("Flashcards"):
-                st.markdown(flashcards)
+                st.markdown(flashcards, unsafe_allow_html=True)
             with st.expander("Mnemonics"):
-                st.markdown(mnemonics)
+                st.markdown(mnemonics, unsafe_allow_html=True)
             with st.expander("Key Terms"):
-                st.markdown(key_terms)
+                st.markdown(key_terms, unsafe_allow_html=True)
             with st.expander("Cheat Sheet"):
-                st.markdown(cheatsheet)
+                st.markdown(cheatsheet, unsafe_allow_html=True)
             with st.expander("Highlighted Key Points"):
-                st.markdown(highlights)
+                st.markdown(highlights, unsafe_allow_html=True)
 else:
     st.info("Upload documents above to begin.")
 
@@ -319,20 +320,20 @@ Include examples and, if needed, LaTeX for mathematical expressions.
     return gemini_generate(model="gemini-text", prompt=prompt, max_tokens=2000, temperature=0.5)
 
 def display_answer(answer):
+    # Try to decode JSON first; if successful, render it as JSON
     try:
         st.json(json.loads(answer))
         return
     except json.JSONDecodeError:
         pass
-    if re.search(r'<[^>]+>', answer):
-        st.markdown(answer, unsafe_allow_html=True)
-    elif answer.strip().startswith(r"\min"):
-        st.latex(answer.strip())
-    elif (matrix := re.search(r"(\\left\(.*?\\right\))", answer, re.DOTALL)):
-        st.markdown(answer.replace(matrix.group(1), ""))
-        st.latex(matrix.group(1))
+
+    # If the answer starts with an HTML document, render with components.html
+    answer_strip = answer.strip().lower()
+    if answer_strip.startswith("<html") or answer_strip.startswith("<!doctype html"):
+        components.html(answer, height=600)
     else:
-        st.markdown(answer)
+        # Otherwise, render using Markdown with unsafe HTML enabled
+        st.markdown(answer, unsafe_allow_html=True)
 
 if st.button("Get Answer") and doubt_text:
     with st.spinner("🔍 Searching for context and generating answer..."):
