@@ -13,16 +13,13 @@ import requests
 from pptx import Presentation
 import streamlit.components.v1 as components
 
-# --- Page Config ---
+# --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
-
-# --- HTML Banner ---
 st.html("""
 <div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
     <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
 </div>
 """)
-
 st.title("Vekkam - the Study Buddy of Your Dreams")
 st.text("Review summaries, flashcards, cheat sheets, and more to reinforce your learning.")
 
@@ -40,7 +37,7 @@ def extract_text(file):
         with fitz.open(stream=file.read(), filetype="pdf") as doc:
             return "".join(page.get_text() for page in doc)
     elif ext.endswith(".docx"):
-        return "\n".join([p.text for p in docx.Document(file).paragraphs])
+        return "\n".join(p.text for p in docx.Document(file).paragraphs)
     elif ext.endswith(".pptx"):
         prs = Presentation(file)
         return "\n".join(shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, "text"))
@@ -50,7 +47,7 @@ def extract_text(file):
         return pytesseract.image_to_string(Image.open(file))
     return ""
 
-# --- Gemini API Call ---
+# --- Gemini API Call (via Vekkam Endpoint) ---
 def call_gemini(prompt, temperature=0.7, max_tokens=2048):
     url = "https://vekkam.streamlit.app/"
     headers = {
@@ -75,8 +72,7 @@ def call_gemini(prompt, temperature=0.7, max_tokens=2048):
     else:
         return f"<p style='color:red;'>Gemini API error {response.status_code}: {html.escape(response.text)}</p>"
 
-
-# --- Smart Renderer ---
+# --- Smart Display ---
 def render_response(response):
     response = response.strip()
     if response.lower().startswith("<!doctype html") or response.lower().startswith("<html"):
@@ -84,7 +80,7 @@ def render_response(response):
     else:
         st.markdown(response, unsafe_allow_html=True)
 
-# --- Concept Map ---
+# --- Concept Map via Gemini ---
 def get_concept_map(text):
     prompt = f"""You are an AI that converts text into a JSON concept map.
 Use this format:
@@ -106,7 +102,7 @@ Use this format:
     }}
   ]
 }}
-Make the map detailed with concise definitions.
+Make the map detailed but concise.
 Text:
 {text}"""
     raw_output = call_gemini(prompt, temperature=0.4)
@@ -119,7 +115,7 @@ Text:
         st.code(raw_output)
         return None
 
-# --- Graph Plotting ---
+# --- Build and Plot Mind Map ---
 def build_igraph_graph(concept_json):
     vertices, edges = [], []
 
@@ -139,7 +135,8 @@ def build_igraph_graph(concept_json):
     walk(root)
     g = ig.Graph(directed=True)
     g.add_vertices([v["id"] for v in vertices])
-    g.vs["label"], g.vs["description"] = [v["label"] for v in vertices], [v["description"] for v in vertices]
+    g.vs["label"] = [v["label"] for v in vertices]
+    g.vs["description"] = [v["description"] for v in vertices]
     if edges:
         g.add_edges(edges)
     return g
@@ -152,6 +149,7 @@ def plot_igraph_graph(g):
         x1, y1 = layout[e.target]
         edge_x += [x0, x1, None]
         edge_y += [y0, y1, None]
+
     edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
     node_x, node_y, texts = [], [], []
     for i, v in enumerate(g.vs):
@@ -169,7 +167,7 @@ def plot_igraph_graph(g):
                                       xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                                       yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
 
-# --- AI Features using Gemini ---
+# --- Study Aids ---
 def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", temperature=0.5)
 def generate_questions(text): return call_gemini(f"Generate 15 educational quiz questions:\n\n{text[:4000]}", temperature=0.5)
 def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text[:4000]}")
@@ -194,7 +192,7 @@ def process_file(file):
         "highlights": generate_highlights(text)
     }
 
-# --- Main Logic ---
+# --- Main App Logic ---
 if uploaded_files:
     for file in uploaded_files:
         with st.spinner(f"Processing: {file.name}"):
