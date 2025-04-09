@@ -95,9 +95,9 @@ def plot_mind_map(nodes, edges):
     g.add_vertices(len(nodes))
     g.add_edges([(id_to_index[e['source']], id_to_index[e['target']]) for e in edges])
 
-    # Use Kamada-Kawai layout for better spacing
+    # Kamada-Kawai layout for better spacing
     layout = g.layout("kk")
-    scale = 3  # Scale to increase distance between nodes
+    scale = 3  # Increase spacing
 
     edge_x, edge_y = [], []
     for e in g.es:
@@ -106,27 +106,35 @@ def plot_mind_map(nodes, edges):
         edge_x += [x0 * scale, x1 * scale, None]
         edge_y += [y0 * scale, y1 * scale, None]
 
-    node_x, node_y, labels = [], [], []
+    node_x, node_y, hover_labels = [], [], []
     for i, v in enumerate(g.vs):
         x, y = layout[i]
         node_x.append(x * scale)
         node_y.append(y * scale)
-        labels.append(f"<b>{nodes[i]['label']}</b>")
 
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines',
-                            line=dict(width=1, color='#888'), hoverinfo='none')
+        label = nodes[i]['label']
+        desc = nodes[i].get('description', 'No description available.')
+        hover_labels.append(f"<b>{label}</b><br>{desc}")
+
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y, mode='lines',
+        line=dict(width=1, color='#888'), hoverinfo='none'
+    )
 
     node_trace = go.Scatter(
-        x=node_x, y=node_y, mode='markers+text', text=[n['label'] for n in nodes],
-        textposition="top center", marker=dict(size=20, color='#00cc96', line_width=2),
-        hoverinfo='text', hovertext=labels
+        x=node_x, y=node_y, mode='markers+text',
+        text=[n['label'] for n in nodes],
+        textposition="top center",
+        marker=dict(size=20, color='#00cc96', line_width=2),
+        hoverinfo='text',
+        hovertext=hover_labels
     )
 
     fig = go.Figure(
         data=[edge_trace, node_trace],
         layout=go.Layout(
             title="🧠 Gemini-Generated Mind Map",
-            width=1200, height=800,  # High resolution
+            width=1200, height=800,
             hovermode='closest',
             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
