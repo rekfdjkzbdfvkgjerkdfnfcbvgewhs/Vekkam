@@ -62,7 +62,7 @@ def extract_text(file):
 # --- Gemini API Wrapper using requests ---
 def gemini_generate(model, prompt, max_tokens, temperature):
     # Adjust the endpoint URL if necessary.
-    url = "https://api.gemini.ai/v1/generate"
+    url = "https://vekkam.streamlit.app/"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {GEMINI_API_KEY}"
