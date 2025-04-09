@@ -81,20 +81,9 @@ def gemini_generate(model, prompt, max_tokens, temperature):
     
     if response.status_code == 200:
         content = response.text.strip()
-        # If the response seems to be HTML, convert it to Markdown
-        if content.lower().startswith("<!doctype html") or content.lower().startswith("<html"):
-            # Convert HTML to Markdown using html2text
-            markdown_text = html2text.html2text(content)
-            # Optionally, wrap the markdown text in a JSON structure similar to what you'd expect
-            return json.dumps({"generated_text": markdown_text.strip()})
-        else:
-            try:
-                result = response.json()
-                return result.get("generated_text", "").strip()
-            except json.JSONDecodeError as e:
-                st.error("JSON decode error: " + str(e))
-                st.write("Response text:", response.text)
-                return ""
+        # Convert HTML to Markdown using html2text
+        markdown_text = html2text.html2text(content)
+        return markdown_text.strip()
     else:
         st.error(f"Gemini API error: {response.status_code}, {response.text}")
         return ""
