@@ -76,7 +76,7 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
                 st.warning("Rate limit reached. Retrying in 30 seconds...")
                 time.sleep(retry_delay)
             else:
-                return "<p>Okay, we thinnk there's something wrong here. Come back in a few minutes and try again. If there's anythign wrong, let us know at team.vekkam@gmail.com</p>"
+                return "<p>Okay, we think there's something wrong here. Come back after midnight, we think there's a problem with the API calling. If there's anything wrong, let us know at team.vekkam@gmail.com</p>"
         else:
             break  # Other errors—don't retry
 
@@ -171,7 +171,7 @@ def plot_mind_map(nodes, edges):
 
     fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
         title="🧠 Mind Map",
-        width=1400, height=1000,
+        width=2000, height=1600,
         hovermode='closest',
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
