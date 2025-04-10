@@ -106,7 +106,7 @@ IMPORTANT:
 Text:
 {text}
 """
-    response = call_gemini(prompt, temperature=0.4)
+    response = call_gemini(prompt, temperature=0.5)
 
     try:
         json_data = re.search(r'\{.*\}', response, re.DOTALL)
@@ -171,7 +171,7 @@ def plot_mind_map(nodes, edges):
 
     fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
         title="🧠 Mind Map",
-        width=1200, height=800,
+        width=1400, height=1000,
         hovermode='closest',
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
