@@ -66,7 +66,7 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
 # --- Generate Mind Map JSON ---
-def get_mind_map(text):
+def get_mind_map(text):def get_mind_map(text):
     prompt = f"""
 You are an assistant that creates a JSON mind map from the text below.
 
@@ -76,25 +76,33 @@ Structure:
   "edges": [{{"source": "1", "target": "2"}}]
 }}
 
-Ensure:
-- Each node has a short but meaningful 'description'
-- Output only valid JSON with nodes and edges
-- Avoid extra commentary or markdown
-- Make the descriptions concise but full of information that may come in a test.
+IMPORTANT:
+- Output only valid JSON.
+- Do NOT include markdown, explanation, or commentary.
+- Ensure both "nodes" and "edges" are present.
 
 Text:
 {text}
 """
     response = call_gemini(prompt, temperature=0.4)
+
     try:
         json_data = re.search(r'\{.*\}', response, re.DOTALL)
-        if json_data:
-            cleaned = re.sub(r",\s*([}\]])", r"\1", json_data.group(0))
-            return json.loads(cleaned)
+        if not json_data:
+            raise ValueError("No JSON block found.")
+        cleaned = re.sub(r",\s*([}\]])", r"\1", json_data.group(0))
+        parsed = json.loads(cleaned)
+
+        # Ensure both keys exist
+        if "nodes" not in parsed or "edges" not in parsed:
+            raise ValueError("Response missing 'nodes' or 'edges'.")
+
+        return parsed
+
     except Exception as e:
-        st.error(f"Failed to parse Gemini response: {e}")
+        st.error(f"Mind map JSON parsing failed: {e}")
         st.code(response)
-    return None
+        return None
 
 # --- Plot Mind Map with Plotly Export ---
 def plot_mind_map(nodes, edges):
