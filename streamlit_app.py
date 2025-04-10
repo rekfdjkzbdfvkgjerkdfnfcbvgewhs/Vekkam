@@ -66,7 +66,7 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
 # --- Generate Mind Map JSON ---
-def get_mind_map(text):def get_mind_map(text):
+def get_mind_map(text):
     prompt = f"""
 You are an assistant that creates a JSON mind map from the text below.
 
