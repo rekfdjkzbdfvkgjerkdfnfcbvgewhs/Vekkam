@@ -154,7 +154,7 @@ def plot_mind_map(nodes, edges):
 
 # --- AI Learning Aids ---
 def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", temperature=0.5, max_tokens=8192)
-def generate_questions(text): return call_gemini(f"Generate 15 quiz questions:\n\n{text[:4000]}, max_tokens=8192")
+def generate_questions(text): return call_gemini(f"Generate 15 quiz questions for an exam (so no ISSN Codes, author names, publishing year of the document or stuf like that. Only the main content that a professor will ask in an exam):\n\n{text[:4000]}, max_tokens=8192")
 def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text[:4000]}, max_tokens=8192")
 def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text[:4000]}, max_tokens=8192")
 def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text[:4000]}, max_tokens=8192")
