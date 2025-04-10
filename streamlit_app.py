@@ -81,6 +81,7 @@ IMPORTANT:
 - Do NOT include markdown, explanation, or commentary.
 - Ensure both "nodes" and "edges" are present.
 - Include a short definition/description as applicable for each of the bubbles in the mind map.
+- Keep it short and Sweet so that it looks clean
 - It's for a test I have tomorrow.
 
 Text:
