@@ -11,6 +11,7 @@ import igraph as ig
 import requests
 from pptx import Presentation
 import streamlit.components.v1 as components
+import time
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
@@ -48,7 +49,7 @@ def extract_text(file):
 
 # --- Gemini API Call ---
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={st.secrets['gemini_api_key']}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -57,13 +58,30 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
             "maxOutputTokens": max_tokens
         }
     }
-    res = requests.post(url, headers=headers, json=payload)
-    if res.status_code == 200:
-        try:
-            return res.json()["candidates"][0]["content"]["parts"][0]["text"]
-        except Exception as e:
-            return f"<p>Error parsing response: {e}</p>"
+
+    max_retries = 3
+    retry_delay = 30  # seconds
+
+    for attempt in range(max_retries):
+        res = requests.post(url, headers=headers, json=payload)
+
+        if res.status_code == 200:
+            try:
+                return res.json()["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception as e:
+                return f"<p>Error parsing response: {e}</p>"
+
+        elif res.status_code == 429:
+            if attempt < max_retries - 1:
+                st.warning("Rate limit reached. Retrying in 30 seconds...")
+                time.sleep(retry_delay)
+            else:
+                return "<p>Okay, we thinnk there's something wrong here. Come back in a few minutes and try again. If there's anythign wrong, let us know at team.vekkam@gmail.com</p>"
+        else:
+            break  # Other errors—don't retry
+
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
+
 
 # --- Generate Mind Map JSON ---
 def get_mind_map(text):
