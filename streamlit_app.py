@@ -80,6 +80,8 @@ IMPORTANT:
 - Output only valid JSON.
 - Do NOT include markdown, explanation, or commentary.
 - Ensure both "nodes" and "edges" are present.
+- Include a short definition/description as applicable for each of the bubbles in the mind map.
+- It's for a test I have tomorrow.
 
 Text:
 {text}
