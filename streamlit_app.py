@@ -12,16 +12,14 @@ import requests
 from pptx import Presentation
 import streamlit.components.v1 as components
 
-# --- Page Config & Banner ---
+# --- Page Setup ---
 st.set_page_config(page_title="Vekkam", layout="wide")
 st.markdown("""
     <div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
         <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
     </div>
 """, unsafe_allow_html=True)
-
 st.title("Vekkam - the Study Buddy of Your Dreams")
-st.info("Upload files to generate summaries, mind maps, flashcards, and more.")
 
 # --- File Upload ---
 uploaded_files = st.file_uploader(
@@ -30,7 +28,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# --- Text Extraction ---
+# --- Extract Text from Uploaded File ---
 def extract_text(file):
     ext = file.name.lower()
     if ext.endswith(".pdf"):
@@ -46,8 +44,8 @@ def extract_text(file):
         return pytesseract.image_to_string(Image.open(file))
     return ""
 
-# --- Gemini API Call ---
-def call_gemini(prompt, temperature=0.7, max_tokens=2048):
+# --- Call Gemini API ---
+def call_gemini(prompt, temperature=0.7, max_tokens=8192):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
     payload = {
@@ -62,25 +60,19 @@ def call_gemini(prompt, temperature=0.7, max_tokens=2048):
         try:
             return res.json()["candidates"][0]["content"]["parts"][0]["text"]
         except Exception as e:
-            return f"<p>Error parsing response: {e}</p>"
+            return f"<p>Parsing error: {e}</p>"
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
-# --- Generate Mind Map JSON ---
+# --- Mind Map Generator from Gemini (with Descriptions) ---
 def get_mind_map(text):
     prompt = f"""
-You are an assistant that creates a JSON mind map from the text below.
+You are a mind map generator AI.
 
-Structure:
-{{
-  "nodes": [{{"id": "1", "label": "Label", "description": "Short definition"}}],
-  "edges": [{{"source": "1", "target": "2"}}]
-}}
+Create a JSON object with:
+- "nodes": each with "id", "label", and a short "description"
+- "edges": each with "source" and "target" referencing node IDs
 
-Ensure:
-- Each node has a short but meaningful 'description'
-- Output only valid JSON with nodes and edges
-- Avoid extra commentary or markdown
-- Make the descriptions concise but full of information that may come in a test.
+Only return raw valid JSON.
 
 Text:
 {text}
@@ -96,17 +88,23 @@ Text:
         st.code(response)
     return None
 
-# --- Plot Mind Map with Plotly Export ---
+# --- Plot Mind Map using Plotly ---
 def plot_mind_map(nodes, edges):
+    if len(nodes) < 2:
+        st.warning("Mind map needs at least 2 nodes.")
+        return
+
     id_to_index = {node['id']: i for i, node in enumerate(nodes)}
     g = ig.Graph(directed=True)
     g.add_vertices(len(nodes))
     g.add_edges([(id_to_index[e['source']], id_to_index[e['target']]) for e in edges])
 
-    # Kamada-Kawai layout for better spacing
-    layout = g.layout("kk")
-    scale = 3  # Increase spacing
+    try:
+        layout = g.layout("kk")
+    except:
+        layout = g.layout("fr")
 
+    scale = 3
     edge_x, edge_y = [], []
     for e in g.es:
         x0, y0 = layout[e.source]
@@ -114,62 +112,52 @@ def plot_mind_map(nodes, edges):
         edge_x += [x0 * scale, x1 * scale, None]
         edge_y += [y0 * scale, y1 * scale, None]
 
-    node_x, node_y, hover_labels = [], [], []
+    node_x, node_y, hover_text = [], [], []
     for i, v in enumerate(g.vs):
         x, y = layout[i]
         node_x.append(x * scale)
         node_y.append(y * scale)
-
         label = nodes[i]['label']
-        desc = nodes[i].get('description', 'No description available.')
-        hover_labels.append(f"<b>{label}</b><br>{desc}")
+        desc = nodes[i].get('description', '')
+        hover_text.append(f"<b>{label}</b><br>{desc}")
 
-    edge_trace = go.Scatter(
-        x=edge_x, y=edge_y, mode='lines',
-        line=dict(width=1, color='#888'), hoverinfo='none'
-    )
-
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
     node_trace = go.Scatter(
         x=node_x, y=node_y, mode='markers+text',
         text=[n['label'] for n in nodes],
-        textposition="top center",
-        marker=dict(size=20, color='#00cc96', line_width=2),
-        hoverinfo='text',
-        hovertext=hover_labels
+        textposition="top center", marker=dict(size=20, color='#00cc96', line_width=2),
+        hoverinfo='text', hovertext=hover_text
     )
 
     fig = go.Figure(
         data=[edge_trace, node_trace],
         layout=go.Layout(
-            title="🧠 Mind Map",
-            width=1200, height=800,
-            hovermode='closest',
+            title="🧠 Gemini-Generated Mind Map",
+            width=1200, height=800, hovermode='closest',
             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
         )
     )
 
-    html_str = fig.to_html(full_html=False, include_plotlyjs='cdn')
-    components.html(html_str, height=900, scrolling=True)
+    components.html(fig.to_html(full_html=False, include_plotlyjs='cdn'), height=900, scrolling=True)
 
-# --- AI Learning Aids ---
-def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:8000]}", temperature=0.5, max_tokens=8192)
-def generate_questions(text): return call_gemini(f"Generate 15 quiz questions for an exam (so no ISSN Codes, author names, publishing year of the document or stuf like that. Only the main content that a professor will ask in an exam):\n\n{text[:8000]}, max_tokens=8192")
-def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text[:8000]}, max_tokens=8192")
-def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text[:8000]}, max_tokens=8192")
-def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text[:8000]}, max_tokens=8192")
-def generate_cheatsheet(text): return call_gemini(f"Create a cheat sheet:\n\n{text[:8000]}, max_tokens=8192")
-def generate_highlights(text): return call_gemini(f"List key facts and highlights:\n\n{text[:8000]}, max_tokens=8192")
+# --- AI Study Aids ---
+def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text[:4000]}", 0.5)
+def generate_questions(text): return call_gemini(f"Generate 15 quiz questions:\n\n{text[:4000]}", 0.5)
+def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text[:4000]}")
+def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text[:4000]}")
+def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text[:4000]}", 0.6)
+def generate_cheatsheet(text): return call_gemini(f"Create a cheat sheet:\n\n{text[:4000]}", 0.7)
+def generate_highlights(text): return call_gemini(f"List key facts and highlights:\n\n{text[:4000]}")
 
-# --- Display Logic ---
-def render_section(title, content):
-    st.subheader(title)
-    if content.strip().startswith("<"):
-        components.html(content, height=600, scrolling=True)
+# --- Smart Display ---
+def render_response(response):
+    if response.strip().startswith("<"):
+        components.html(response, height=600, scrolling=True)
     else:
-        st.markdown(content, unsafe_allow_html=True)
+        st.markdown(response, unsafe_allow_html=True)
 
-# --- Main Execution ---
+# --- App Execution ---
 if uploaded_files:
     for file in uploaded_files:
         with st.spinner(f"Processing {file.name}..."):
@@ -190,18 +178,21 @@ if uploaded_files:
         else:
             st.error("Mind map generation failed.")
 
-        render_section("📌 Summary", summary)
-        render_section("📝 Quiz Questions", questions)
+        st.subheader("📌 Summary")
+        render_response(summary)
 
-        with st.expander("Flashcards"):
-            render_section("📚 Flashcards", flashcards)
-        with st.expander("Mnemonics"):
-            render_section("🧠 Mnemonics", mnemonics)
-        with st.expander("Key Terms"):
-            render_section("🔑 Key Terms", key_terms)
-        with st.expander("Cheat Sheet"):
-            render_section("📋 Cheat Sheet", cheatsheet)
-        with st.expander("Highlights"):
-            render_section("⭐ Highlights", highlights)
+        st.subheader("📝 Quiz Questions")
+        render_response(questions)
+
+        with st.expander("📚 Flashcards"):
+            render_response(flashcards)
+        with st.expander("🧠 Mnemonics"):
+            render_response(mnemonics)
+        with st.expander("🔑 Key Terms"):
+            render_response(key_terms)
+        with st.expander("📋 Cheat Sheet"):
+            render_response(cheatsheet)
+        with st.expander("⭐ Highlights"):
+            render_response(highlights)
 else:
     st.info("Upload a document to get started.")
