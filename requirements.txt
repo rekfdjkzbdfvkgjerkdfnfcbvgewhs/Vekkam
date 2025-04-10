@@ -9,4 +9,3 @@ Pillow
 pytesseract
 python-pptx
 html2text
-time
