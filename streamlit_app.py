@@ -229,10 +229,10 @@ if uploaded_files:
 
         render_section("📌 Summary", summary)
         render_section("📝 Quiz Questions (You gotta ask ChatGPT for this, we do it anyways)", questions)
-        with st.expander("📚 Flashcards"): render_section("Flashcards (Wonder what this is? ChatGPT don't do it, do they?)", flashcards)
-        with st.expander("🧠 Mnemonics"): render_section("Mnemonics (Still working on this)", mnemonics)
-        with st.expander("🔑 Key Terms"): render_section("Key Terms (We'll let ChatGPT come at par with us for this one)", key_terms)
-        with st.expander("📋 Cheat Sheet"): render_section("Cheat Sheet (Chug a coffee and run rhough this, you're golden for the exam!)", cheatsheet)
-        with st.expander("⭐ Highlights"): render_section("Highlights (everything impoirant in a single place, just for you <3)", highlights)
+        with st.expander("📚 Flashcards (Wonder what this is? ChatGPT don't do it, do they?)"): render_section("Flashcards", flashcards)
+        with st.expander("🧠 Mnemonics (Still working on this)"): render_section("Mnemonics", mnemonics)
+        with st.expander("🔑 Key Terms (We'll let ChatGPT come at par with us for this one)"): render_section("Key Terms", key_terms)
+        with st.expander("📋 Cheat Sheet (Chug a coffee and run through this, you're golden for the exam!)"): render_section("Cheat Sheet", cheatsheet)
+        with st.expander("⭐ Highlights (everything important in a single place, just for you <3)"): render_section("Highlights", highlights)
 else:
     st.info("Upload a document to get started.")
