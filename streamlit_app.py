@@ -102,7 +102,9 @@ IMPORTANT:
 - Keep it short and Sweet so that it looks clean.
 - Generate 5 children each from 7 total nodes
 - It's for a test I have tomorrow.
+- If there's any formulae you see, give a few questions on that as well
 
+Output only the questions.
 Text:
 {text}
 """
