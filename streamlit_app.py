@@ -23,7 +23,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Vekkam - the Study Buddy of Your Dreams")
-st.info("Upload files to generate summaries, mind maps, flashcards, and more.")
+st.info("Upload files to generate summaries, mind maps, flashcards, and more. We do what ChatGPT and NotebookLM by Google can't do.")
 
 # --- File Upload ---
 uploaded_files = st.file_uploader(
@@ -222,17 +222,17 @@ if uploaded_files:
 
         st.markdown(f"---\n## 📄 {file.name}")
         if mind_map:
-            st.subheader("🧠 Mind Map")
+            st.subheader("🧠 Mind Map (ChatGPT can't do this)")
             plot_mind_map(mind_map["nodes"], mind_map["edges"])
         else:
             st.error("Mind map generation failed.")
 
         render_section("📌 Summary", summary)
-        render_section("📝 Quiz Questions", questions)
-        with st.expander("📚 Flashcards"): render_section("Flashcards", flashcards)
-        with st.expander("🧠 Mnemonics"): render_section("Mnemonics", mnemonics)
-        with st.expander("🔑 Key Terms"): render_section("Key Terms", key_terms)
-        with st.expander("📋 Cheat Sheet"): render_section("Cheat Sheet", cheatsheet)
-        with st.expander("⭐ Highlights"): render_section("Highlights", highlights)
+        render_section("📝 Quiz Questions (You gotta ask ChatGPT for this, we do it anyways)", questions)
+        with st.expander("📚 Flashcards"): render_section("Flashcards (Wonder what this is? ChatGPT don't do it, do they?)", flashcards)
+        with st.expander("🧠 Mnemonics"): render_section("Mnemonics (Still working on this)", mnemonics)
+        with st.expander("🔑 Key Terms"): render_section("Key Terms (We'll let ChatGPT come at par with us for this one)", key_terms)
+        with st.expander("📋 Cheat Sheet"): render_section("Cheat Sheet (Chug a coffee and run rhough this, you're golden for the exam!)", cheatsheet)
+        with st.expander("⭐ Highlights"): render_section("Highlights (everything impoirant in a single place, just for you <3)", highlights)
 else:
     st.info("Upload a document to get started.")
