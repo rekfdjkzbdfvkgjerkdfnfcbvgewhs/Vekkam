@@ -138,8 +138,16 @@ def plot_mind_map(nodes, edges):
     id_to_index = {node['id']: i for i, node in enumerate(nodes)}
     g = ig.Graph(directed=True)
     g.add_vertices(len(nodes))
-    g.add_edges([(id_to_index[e['source']], id_to_index[e['target']]) for e in edges])
-
+    valid_edges = []
+    for e in edges:
+        src = e['source']
+        tgt = e['target']
+        if src in id_to_index and tgt in id_to_index:
+            valid_edges.append((id_to_index[src], id_to_index[tgt]))
+        else:
+            print(f"⚠️ Skipping invalid edge: {e}")
+    
+    g.add_edges(valid_edges)
     try:
         layout = g.layout("kk")
     except:
