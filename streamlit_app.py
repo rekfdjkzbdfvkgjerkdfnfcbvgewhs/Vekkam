@@ -135,43 +135,37 @@ def plot_mind_map(nodes, edges):
         st.warning("Mind map needs at least 2 nodes.")
         return
 
-    G = nx.DiGraph()
-    id_to_label = {node['id']: node['label'] for node in nodes}
-    id_to_desc = {node['id']: node.get('description', '') for node in nodes}
+    id_to_index = {node['id']: i for i, node in enumerate(nodes)}
+    g = ig.Graph(directed=True)
+    g.add_vertices(len(nodes))
+    g.add_edges([(id_to_index[e['source']], id_to_index[e['target']]) for e in edges])
 
-    for node in nodes:
-        G.add_node(node['id'], label=node['label'], desc=node.get('description', ''))
+    try:
+        layout = g.layout("kk")
+    except:
+        layout = g.layout("fr")
 
-    for edge in edges:
-        G.add_edge(edge['source'], edge['target'])
-
-    pos = nx.spring_layout(G, seed=42)  # Layout with consistent output
-
+    scale = 3
     edge_x, edge_y = [], []
-    for src, dst in G.edges():
-        x0, y0 = pos[src]
-        x1, y1 = pos[dst]
-        edge_x += [x0, x1, None]
-        edge_y += [y0, y1, None]
+    for e in g.es:
+        x0, y0 = layout[e.source]
+        x1, y1 = layout[e.target]
+        edge_x += [x0 * scale, x1 * scale, None]
+        edge_y += [y0 * scale, y1 * scale, None]
 
     node_x, node_y, hover_labels = [], [], []
-    for node_id in G.nodes():
-        x, y = pos[node_id]
-        node_x.append(x)
-        node_y.append(y)
-        hover_labels.append(f"<b>{id_to_label[node_id]}</b><br>{id_to_desc[node_id]}")
+    for i, node in enumerate(nodes):
+        x, y = layout[i]
+        node_x.append(x * scale)
+        node_y.append(y * scale)
+        label = node['label']
+        desc = node.get('description', 'No description.')
+        hover_labels.append(f"<b>{label}</b><br>{desc}")
 
-    edge_trace = go.Scatter(
-        x=edge_x, y=edge_y,
-        line=dict(width=1, color='#888'),
-        hoverinfo='none',
-        mode='lines'
-    )
-
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
     node_trace = go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers+text',
-        text=[id_to_label[n] for n in G.nodes()],
+        x=node_x, y=node_y, mode='markers+text',
+        text=[node['label'] for node in nodes],
         textposition="top center",
         marker=dict(size=20, color='#00cc96', line_width=2),
         hoverinfo='text',
