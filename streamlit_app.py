@@ -190,7 +190,7 @@ def plot_mind_map(nodes, edges):
     components.html(fig.to_html(full_html=False, include_plotlyjs='cdn'), height=900, scrolling=True)
 
 # --- AI Learning Aids ---
-def generate_summary(text): return call_gemini(f"Summarize this for an exam:\n\n{text}", temperature=0.5)
+def generate_summary(text): return call_gemini(f"Summarize this for an exam and separately list any formulae that are mentioned in the text. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
 def generate_questions(text): return call_gemini(f"Generate 15 quiz questions for an exam (ignore authors, ISSN, etc.):\n\n{text}")
 def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text}")
 def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text}")
