@@ -10,3 +10,4 @@ pytesseract
 python-pptx
 html2text
 networkx
+gTTS
