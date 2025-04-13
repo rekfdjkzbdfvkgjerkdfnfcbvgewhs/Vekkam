@@ -13,6 +13,9 @@ from pptx import Presentation
 import streamlit.components.v1 as components
 import time
 import networkx as nx
+from gtts import gTTS
+import tempfile
+import base64
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
@@ -83,6 +86,15 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
 
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
+def generate_podcast_audio(text, lang="en", slow=False):
+    try:
+        tts = gTTS(text=text, lang=lang, slow=slow)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+            tts.save(fp.name)
+            return fp.name
+    except Exception as e:
+        st.error(f"Podcast generation failed: {e}")
+        return None
 
 # --- Generate Mind Map JSON ---
 def get_mind_map(text):
@@ -128,6 +140,27 @@ Text:
         st.error(f"Mind map JSON parsing failed: {e}")
         st.code(response)
         return None
+
+def render_podcast_section(text):
+    st.subheader("🎙️ AI Podcast")
+    st.caption("Your study notes, as a podcast. Shareable, listenable, repeatable.")
+
+    if st.button("Generate Podcast"):
+        with st.spinner("Creating your audio..."):
+            audio_file_path = generate_podcast_audio(text)
+            if audio_file_path:
+                audio_bytes = open(audio_file_path, "rb").read()
+                b64 = base64.b64encode(audio_bytes).decode()
+                audio_html = f"""
+                <audio controls autoplay>
+                    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+                    Your browser does not support the audio element.
+                </audio>
+                <br><a download="vekkam_podcast.mp3" href="data:audio/mp3;base64,{b64}">📥 Download Podcast</a>
+                """
+                st.markdown(audio_html, unsafe_allow_html=True)
+            else:
+                st.error("Failed to generate podcast.")
 
 # --- Plot Mind Map with Plotly Export ---
 def plot_mind_map(nodes, edges):
@@ -219,6 +252,8 @@ if uploaded_files:
             key_terms = generate_key_terms(text)
             cheatsheet = generate_cheatsheet(text)
             highlights = generate_highlights(text)
+            podcast = render_podcast_section(text)
+
 
         st.markdown(f"---\n## 📄 {file.name}")
         if mind_map:
