@@ -202,11 +202,13 @@ def render_section(title, content):
         st.markdown(content, unsafe_allow_html=True)
 
 # --- Main Logic ---
+# --- Main Logic ---
 if uploaded_files:
     for file in uploaded_files:
         with st.spinner(f"Processing {file.name}..."):
             text = extract_text(file)
-            mind_map = get_mind_map(text)
+
+            # Summarize and Learning Aids
             summary = generate_summary(text)
             questions = generate_questions(text)
             flashcards = generate_flashcards(text)
@@ -214,24 +216,22 @@ if uploaded_files:
             key_terms = generate_key_terms(text)
             cheatsheet = generate_cheatsheet(text)
             highlights = generate_highlights(text)
-            render_podcast_section(text)
+            mind_map = get_mind_map(text)
 
-        st.markdown(f"---\n## 📄 {file.name}")
+        # Render Outputs
+        render_section("📌 Summary", summary)
+        render_section("🧠 Flashcards", flashcards)
+        render_section("📝 Questions", questions)
+        render_section("🔠 Mnemonics", mnemonics)
+        render_section("📚 Key Terms", key_terms)
+        render_section("📄 Cheat Sheet", cheatsheet)
+        render_section("✨ Highlights", highlights)
+
         if mind_map:
-            st.subheader("🧠 Mind Map (ChatGPT can't do this)")
+            st.subheader("🗺️ Mind Map")
             plot_mind_map(mind_map["nodes"], mind_map["edges"])
         else:
-            st.error("Mind map generation failed.")
+            st.warning("Mind map couldn't be created. Please check the content or try again.")
 
-        render_section("📌 Summary", summary)
-        render_section("📝 Quiz Questions (You gotta ask ChatGPT for this, we do it anyways)", questions)
-        with st.expander("📚 Flashcards (Wonder what this is? ChatGPT don’t do it, do they?)"):
-            render_section("Flashcards", flashcards)
-        with st.expander("🧠 Mnemonics (Still working on this)"):
-            render_section("Mnemonics", mnemonics)
-        with st.expander("🔑 Key Terms (We'll let ChatGPT come at par with us for this one)"):
-            render_section("Key Terms", key_terms)
-        with st.expander("📋 Cheat Sheet (Chug a coffee and run through this, you're golden for the exam!)"):
-            render_section("Cheat Sheet", cheatsheet)
-        with st.expander("⭐ Highlights (Everything important in a single place, just for you <3)"):
-            render_section("Highlights", highlights)
+        # 🎙️ Podcast section comes last
+        render_podcast_section(text)
