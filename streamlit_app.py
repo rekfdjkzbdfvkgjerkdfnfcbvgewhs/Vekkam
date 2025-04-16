@@ -334,7 +334,7 @@ def generate_flashcards(text):
 def generate_mnemonics(text): 
     return call_gemini(f"Generate mnemonics:\n\n{text}")
 def generate_key_terms(text): 
-    return call_gemini(f"List all the key terms with definitions:\n\n{text}")
+    return call_gemini(f"List 10 key terms with definitions:\n\n{text}")
 def generate_cheatsheet(text): 
     return call_gemini(f"Create a cheat sheet:\n\n{text}")
 def generate_highlights(text): 
@@ -352,7 +352,8 @@ def render_section(title, content):
 if uploaded_files:
     # Create a placeholder for the interactive loader, visible until first file processing completes.
     loader_placeholder = st.empty()
-    loader_placeholder.components.html(loader_html, height=600)
+    with loader_placeholder:
+        components.html(loader_html, height=600)
     
     first_file_processed = False  # track if the first file's output has been displayed
 
