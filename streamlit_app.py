@@ -43,7 +43,7 @@ loader_html = """
   <style>
     body {
       margin: 0;
-      font-family: 'Comic Sans MS', cursive, sans-serif;
+      font-family: 'Verdana', cursive, sans-serif;
       background: #ffe4e1;
       overflow: hidden;
       text-align: center;
