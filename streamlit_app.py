@@ -32,6 +32,158 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
+# --- Interactive Loader HTML ---
+loader_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interactive Mind Map Loader</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      overflow: hidden;
+      text-align: center;
+    }
+    #loader {
+      width: 100%;
+      height: 100vh;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #progress {
+      font-size: 20px;
+      margin-top: 20px;
+      color: #444;
+    }
+    svg {
+      border: 1px solid #ddd;
+    }
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      width: 120px;
+      padding: 5px;
+      font: 12px sans-serif;
+      background: lightsteelblue;
+      border: 0px;
+      border-radius: 8px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loader Screen -->
+  <div id="loader">
+    <svg width="500" height="500"></svg>
+    <div id="progress">Loading... 0%</div>
+  </div>
+  <!-- Tooltip (for node interactions) -->
+  <div class="tooltip" id="tooltip"></div>
+  <!-- D3.js Library -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const svg = d3.select("svg");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    let progress = 0; // percent progress
+    let nodesData = [];
+
+    // Initialize a D3 force simulation for dynamic node arrangement
+    const simulation = d3.forceSimulation(nodesData)
+      .force("charge", d3.forceManyBody().strength(-50))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collision", d3.forceCollide().radius(20))
+      .on("tick", ticked);
+
+    // Group to hold nodes and labels
+    const nodeGroup = svg.append("g").attr("class", "nodes");
+
+    // Tooltip
+    const tooltip = d3.select("#tooltip");
+
+    // Update function to reposition nodes
+    function ticked() {
+      nodeGroup.selectAll("circle")
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y);
+      nodeGroup.selectAll("text")
+        .attr("x", d => d.x + 5)
+        .attr("y", d => d.y + 5);
+    }
+
+    // Update nodes on the canvas whenever new data is added
+    function updateNodes() {
+      // Data binding for circles (nodes)
+      const circles = nodeGroup.selectAll("circle")
+        .data(nodesData, d => d.id);
+
+      // Enter new nodes
+      const circlesEnter = circles.enter().append("circle")
+        .attr("r", 15)
+        .attr("fill", () => d3.schemeCategory10[Math.floor(Math.random() * 10)])
+        .attr("class", "node")
+        .on("mouseover", (event, d) => {
+          tooltip.transition().duration(200).style("opacity", 0.9);
+          tooltip.html("<strong>" + d.name + "</strong><br>Click for info")
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.transition().duration(500).style("opacity", 0);
+        })
+        .on("click", (event, d) => {
+          alert("More info about: " + d.name);
+        });
+
+      // Data binding for labels
+      const labels = nodeGroup.selectAll("text")
+        .data(nodesData, d => d.id);
+
+      labels.enter().append("text")
+        .text(d => d.name)
+        .attr("font-size", "10px")
+        .attr("fill", "#333");
+
+      simulation.nodes(nodesData);
+      simulation.alpha(1).restart();
+    }
+
+    // Timer to simulate dynamic progress update, continues until externally removed
+    const interval = setInterval(() => {
+      progress = (progress + 1) % 101;  // Loop progress from 0 to 100 repeatedly
+      d3.select("#progress").text("Loading... " + progress + "%");
+
+      // Every 5% add a new node with a custom "topic" name
+      if (progress % 5 === 0) {
+        const newNode = { id: progress, name: "Topic " + progress };
+        nodesData.push(newNode);
+        updateNodes();
+      }
+    }, 400);
+    
+    // When the loader container is removed, clear the interval to stop the timer.
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        if (!document.body.contains(document.getElementById("loader"))) {
+          clearInterval(interval);
+        }
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  </script>
+</body>
+</html>
+"""
+
 # --- Text Extraction ---
 def extract_text(file):
     ext = file.name.lower()
@@ -65,24 +217,20 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
 
     for attempt in range(max_retries):
         res = requests.post(url, headers=headers, json=payload)
-
         if res.status_code == 200:
             try:
                 return res.json()["candidates"][0]["content"]["parts"][0]["text"]
             except Exception as e:
                 return f"<p>Error parsing response: {e}</p>"
-
         elif res.status_code == 429:
             if attempt < max_retries - 1:
                 st.warning("Rate limit reached. Retrying in 30 seconds...")
                 time.sleep(retry_delay)
             else:
-                return "<p>Okay, we think there's something wrong here. Come back after midnight, we think there's a problem with the API calling. If there's anything wrong even then, let us know at team.vekkam@gmail.com</p>"
+                return "<p>API rate limit reached. Please try again later.</p>"
         else:
             break  # Other errors—don't retry
-
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
-
 
 # --- Generate Mind Map JSON ---
 def get_mind_map(text):
@@ -100,30 +248,25 @@ IMPORTANT:
 - Do NOT include markdown, explanation, or commentary.
 - Ensure both "nodes" and "edges" are present.
 - Include a short definition/description as applicable for each of the bubbles in the mind map.
-- Keep it short and Sweet so that it looks clean.
-- Generate 5 children each from 7 total nodes
+- Keep it short and sweet so that it looks clean.
+- Generate 5 children each from 7 total nodes.
 - It's for a test I have tomorrow.
-- If there's any formulae you see, give a few questions on that as well
+- If there's any formulae you see, give a few questions on that as well.
 
 Output only the questions.
 Text:
 {text}
 """
     response = call_gemini(prompt, temperature=0.5)
-
     try:
         json_data = re.search(r'\{.*\}', response, re.DOTALL)
         if not json_data:
             raise ValueError("No JSON block found.")
         cleaned = re.sub(r",\s*([}\]])", r"\1", json_data.group(0))
         parsed = json.loads(cleaned)
-
-        # Ensure both keys exist
         if "nodes" not in parsed or "edges" not in parsed:
             raise ValueError("Response missing 'nodes' or 'edges'.")
-
         return parsed
-
     except Exception as e:
         st.error(f"Mind map JSON parsing failed: {e}")
         st.code(response)
@@ -134,7 +277,6 @@ def plot_mind_map(nodes, edges):
     if len(nodes) < 2:
         st.warning("Mind map needs at least 2 nodes.")
         return
-
     id_to_index = {node['id']: i for i, node in enumerate(nodes)}
     g = ig.Graph(directed=True)
     g.add_vertices(len(nodes))
@@ -144,15 +286,11 @@ def plot_mind_map(nodes, edges):
         tgt = e['target']
         if src in id_to_index and tgt in id_to_index:
             valid_edges.append((id_to_index[src], id_to_index[tgt]))
-        else:
-            print(f"⚠️ Skipping invalid edge: {e}")
-    
     g.add_edges(valid_edges)
     try:
         layout = g.layout("kk")
     except:
         layout = g.layout("fr")
-
     scale = 3
     edge_x, edge_y = [], []
     for e in g.es:
@@ -160,7 +298,6 @@ def plot_mind_map(nodes, edges):
         x1, y1 = layout[e.target]
         edge_x += [x0 * scale, x1 * scale, None]
         edge_y += [y0 * scale, y1 * scale, None]
-
     node_x, node_y, hover_labels = [], [], []
     for i, node in enumerate(nodes):
         x, y = layout[i]
@@ -169,7 +306,6 @@ def plot_mind_map(nodes, edges):
         label = node['label']
         desc = node.get('description', 'No description.')
         hover_labels.append(f"<b>{label}</b><br>{desc}")
-
     edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
     node_trace = go.Scatter(
         x=node_x, y=node_y, mode='markers+text',
@@ -179,7 +315,6 @@ def plot_mind_map(nodes, edges):
         hoverinfo='text',
         hovertext=hover_labels
     )
-
     fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
         title="🧠 Mind Map (ChatGPT can't do this)",
         width=1200, height=800,
@@ -190,13 +325,20 @@ def plot_mind_map(nodes, edges):
     components.html(fig.to_html(full_html=False, include_plotlyjs='cdn'), height=900, scrolling=True)
 
 # --- AI Learning Aids ---
-def generate_summary(text): return call_gemini(f"Summarize this for an exam and separately list any formulae that are mentioned in the text. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
-def generate_questions(text): return call_gemini(f"Generate 15 quiz questions for an exam (ignore authors, ISSN, etc.):\n\n{text}")
-def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A):\n\n{text}")
-def generate_mnemonics(text): return call_gemini(f"Generate mnemonics:\n\n{text}")
-def generate_key_terms(text): return call_gemini(f"List 10 key terms with definitions:\n\n{text}")
-def generate_cheatsheet(text): return call_gemini(f"Create a cheat sheet:\n\n{text}")
-def generate_highlights(text): return call_gemini(f"List key facts and highlights:\n\n{text}")
+def generate_summary(text): 
+    return call_gemini(f"Summarize this for an exam and separately list any formulae that are mentioned in the text. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
+def generate_questions(text): 
+    return call_gemini(f"Generate 15 quiz questions for an exam (ignore authors, ISSN, etc.):\n\n{text}")
+def generate_flashcards(text): 
+    return call_gemini(f"Create flashcards (Q&A):\n\n{text}")
+def generate_mnemonics(text): 
+    return call_gemini(f"Generate mnemonics:\n\n{text}")
+def generate_key_terms(text): 
+    return call_gemini(f"List all the key terms with definitions:\n\n{text}")
+def generate_cheatsheet(text): 
+    return call_gemini(f"Create a cheat sheet:\n\n{text}")
+def generate_highlights(text): 
+    return call_gemini(f"List key facts and highlights:\n\n{text}")
 
 # --- Display Helper ---
 def render_section(title, content):
@@ -208,19 +350,24 @@ def render_section(title, content):
 
 # --- Main Logic ---
 if uploaded_files:
-    for file in uploaded_files:
-        with st.spinner(f"Processing {file.name}..."):
-            text = extract_text(file)
-            mind_map = get_mind_map(text)
-            summary = generate_summary(text)
-            questions = generate_questions(text)
-            flashcards = generate_flashcards(text)
-            mnemonics = generate_mnemonics(text)
-            key_terms = generate_key_terms(text)
-            cheatsheet = generate_cheatsheet(text)
-            highlights = generate_highlights(text)
+    # Create a placeholder for the interactive loader, visible until first file processing completes.
+    loader_placeholder = st.empty()
+    loader_placeholder.components.html(loader_html, height=600)
+    
+    first_file_processed = False  # track if the first file's output has been displayed
 
+    for file in uploaded_files:
         st.markdown(f"---\n## 📄 {file.name}")
+        text = extract_text(file)
+        mind_map = get_mind_map(text)
+        summary = generate_summary(text)
+        questions = generate_questions(text)
+        flashcards = generate_flashcards(text)
+        mnemonics = generate_mnemonics(text)
+        key_terms = generate_key_terms(text)
+        cheatsheet = generate_cheatsheet(text)
+        highlights = generate_highlights(text)
+
         if mind_map:
             st.subheader("🧠 Mind Map (ChatGPT can't do this)")
             plot_mind_map(mind_map["nodes"], mind_map["edges"])
@@ -229,10 +376,20 @@ if uploaded_files:
 
         render_section("📌 Summary", summary)
         render_section("📝 Quiz Questions (You gotta ask ChatGPT for this, we do it anyways)", questions)
-        with st.expander("📚 Flashcards (Wonder what this is? ChatGPT don't do it, do they?)"): render_section("Flashcards", flashcards)
-        with st.expander("🧠 Mnemonics (Still working on this)"): render_section("Mnemonics", mnemonics)
-        with st.expander("🔑 Key Terms (We'll let ChatGPT come at par with us for this one)"): render_section("Key Terms", key_terms)
-        with st.expander("📋 Cheat Sheet (Chug a coffee and run through this, you're golden for the exam!)"): render_section("Cheat Sheet", cheatsheet)
-        with st.expander("⭐ Highlights (everything important in a single place, just for you <3)"): render_section("Highlights", highlights)
+        with st.expander("📚 Flashcards (Wonder what this is? ChatGPT don't do it, do they?)"):
+            render_section("Flashcards", flashcards)
+        with st.expander("🧠 Mnemonics (Still working on this)"):
+            render_section("Mnemonics", mnemonics)
+        with st.expander("🔑 Key Terms (We'll let ChatGPT come at par with us for this one)"):
+            render_section("Key Terms", key_terms)
+        with st.expander("📋 Cheat Sheet (Chug a coffee and run through this, you're golden for the exam!)"):
+            render_section("Cheat Sheet", cheatsheet)
+        with st.expander("⭐ Highlights (everything important in a single place, just for you <3)"):
+            render_section("Highlights", highlights)
+        
+        # Remove the loader after processing the first file.
+        if not first_file_processed:
+            loader_placeholder.empty()
+            first_file_processed = True
 else:
     st.info("Upload a document to get started.")
