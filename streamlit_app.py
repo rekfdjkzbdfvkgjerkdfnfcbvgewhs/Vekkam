@@ -43,8 +43,8 @@ loader_html = """
   <style>
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f0f0f0;
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background: #ffe4e1;
       overflow: hidden;
       text-align: center;
     }
@@ -58,22 +58,23 @@ loader_html = """
       justify-content: center;
     }
     #progress {
-      font-size: 20px;
-      margin-top: 20px;
-      color: #444;
+      font-size: 30px;
+      margin-top: 30px;
+      color: #ff4500;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
     }
     svg {
-      border: 1px solid #ddd;
+      border: none;
     }
     .tooltip {
       position: absolute;
       text-align: center;
-      width: 120px;
-      padding: 5px;
-      font: 12px sans-serif;
-      background: lightsteelblue;
-      border: 0px;
-      border-radius: 8px;
+      width: 150px;
+      padding: 8px;
+      font: bold 14px sans-serif;
+      background: #ffdab9;
+      border: 2px dashed #ff4500;
+      border-radius: 12px;
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.2s ease-in-out;
@@ -83,8 +84,8 @@ loader_html = """
 <body>
   <!-- Loader Screen -->
   <div id="loader">
-    <svg width="500" height="500"></svg>
-    <div id="progress">Loading... 0%</div>
+    <svg width="800" height="800"></svg>
+    <div id="progress">Yay, loading fun... 0%</div>
   </div>
   <!-- Tooltip (for node interactions) -->
   <div class="tooltip" id="tooltip"></div>
@@ -99,9 +100,9 @@ loader_html = """
 
     // Initialize a D3 force simulation for dynamic node arrangement
     const simulation = d3.forceSimulation(nodesData)
-      .force("charge", d3.forceManyBody().strength(-50))
+      .force("charge", d3.forceManyBody().strength(-60))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(20))
+      .force("collision", d3.forceCollide().radius(25))
       .on("tick", ticked);
 
     // Group to hold nodes and labels
@@ -127,13 +128,13 @@ loader_html = """
         .data(nodesData, d => d.id);
 
       // Enter new nodes
-      const circlesEnter = circles.enter().append("circle")
-        .attr("r", 15)
-        .attr("fill", () => d3.schemeCategory10[Math.floor(Math.random() * 10)])
+      circles.enter().append("circle")
+        .attr("r", 20)
+        .attr("fill", () => d3.schemeSet3[Math.floor(Math.random() * 12)])
         .attr("class", "node")
         .on("mouseover", (event, d) => {
           tooltip.transition().duration(200).style("opacity", 0.9);
-          tooltip.html("<strong>" + d.name + "</strong><br>Click for info")
+          tooltip.html("<strong>" + d.name + "</strong><br>Tap for surprises!")
             .style("left", (event.pageX + 10) + "px")
             .style("top", (event.pageY - 28) + "px");
         })
@@ -141,7 +142,7 @@ loader_html = """
           tooltip.transition().duration(500).style("opacity", 0);
         })
         .on("click", (event, d) => {
-          alert("More info about: " + d.name);
+          alert("Surprise info about: " + d.name);
         });
 
       // Data binding for labels
@@ -150,7 +151,7 @@ loader_html = """
 
       labels.enter().append("text")
         .text(d => d.name)
-        .attr("font-size", "10px")
+        .attr("font-size", "14px")
         .attr("fill", "#333");
 
       simulation.nodes(nodesData);
@@ -160,17 +161,17 @@ loader_html = """
     // Timer to simulate dynamic progress update, continues until externally removed
     const interval = setInterval(() => {
       progress = (progress + 1) % 101;  // Loop progress from 0 to 100 repeatedly
-      d3.select("#progress").text("Loading... " + progress + "%");
-
-      // Every 5% add a new node with a custom "topic" name
+      d3.select("#progress").text("Yay, loading fun... " + progress + "%");
+      
+      // Every 5% add a new playful node
       if (progress % 5 === 0) {
-        const newNode = { id: progress, name: "Topic " + progress };
+        const newNode = { id: progress, name: "Fun " + progress };
         nodesData.push(newNode);
         updateNodes();
       }
     }, 400);
     
-    // When the loader container is removed, clear the interval to stop the timer.
+    // Observer to clear the interval when the loader is removed.
     const observer = new MutationObserver(mutations => {
       mutations.forEach(mutation => {
         if (!document.body.contains(document.getElementById("loader"))) {
