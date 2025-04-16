@@ -90,10 +90,11 @@ loader_html = """
   <script>
     let progress = 0;
     const progressText = document.getElementById('progress');
+    // Update interval set to 450ms for a total of ~45 seconds to reach 100%
     const interval = setInterval(() => {
-      progress = (progress + 1) % 101;  // Loop from 0 to 100 repeatedly
+      progress = (progress + 1) % 101;  // Loop progress from 0 to 100 repeatedly
       progressText.textContent = `Loading... ${progress}%`;
-    }, 100);
+    }, 450);
     
     // Clear the interval when loader is removed
     const observer = new MutationObserver(mutations => {
