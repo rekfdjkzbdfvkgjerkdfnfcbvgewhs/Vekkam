@@ -39,19 +39,18 @@ loader_html = """
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Interactive Mind Map Loader</title>
+  <title>Brainrot Loader</title>
   <style>
     body {
       margin: 0;
-      font-family: 'Verdana', cursive, sans-serif;
-      background: #ffe4e1;
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
       overflow: hidden;
       text-align: center;
     }
     #loader {
       width: 100%;
       height: 100vh;
-      background: #fff;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -61,117 +60,42 @@ loader_html = """
       font-size: 30px;
       margin-top: 30px;
       color: #ff4500;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+      animation: pulse 2s infinite;
     }
-    svg {
-      border: none;
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
     }
-    .tooltip {
-      position: absolute;
-      text-align: center;
+    .mascot {
       width: 150px;
-      padding: 8px;
-      font: bold 14px sans-serif;
-      background: #ffdab9;
-      border: 2px dashed #ff4500;
-      border-radius: 12px;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s ease-in-out;
+      height: 150px;
+      background: url('mascot.png') no-repeat center center;
+      background-size: contain;
+      animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
     }
   </style>
 </head>
 <body>
   <!-- Loader Screen -->
   <div id="loader">
-    <svg width="800" height="800"></svg>
-    <div id="progress">Yay, loading fun... 0%</div>
+    <div class="mascot"></div>
+    <div id="progress">Loading... 0%</div>
   </div>
-  <!-- Tooltip (for node interactions) -->
-  <div class="tooltip" id="tooltip"></div>
-  <!-- D3.js Library -->
-  <script src="https://d3js.org/d3.v7.min.js"></script>
   <script>
-    const svg = d3.select("svg");
-    const width = +svg.attr("width");
-    const height = +svg.attr("height");
-    let progress = 0; // percent progress
-    let nodesData = [];
-
-    // Initialize a D3 force simulation for dynamic node arrangement
-    const simulation = d3.forceSimulation(nodesData)
-      .force("charge", d3.forceManyBody().strength(-60))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(25))
-      .on("tick", ticked);
-
-    // Group to hold nodes and labels
-    const nodeGroup = svg.append("g").attr("class", "nodes");
-
-    // Tooltip
-    const tooltip = d3.select("#tooltip");
-
-    // Update function to reposition nodes
-    function ticked() {
-      nodeGroup.selectAll("circle")
-        .attr("cx", d => d.x)
-        .attr("cy", d => d.y);
-      nodeGroup.selectAll("text")
-        .attr("x", d => d.x + 5)
-        .attr("y", d => d.y + 5);
-    }
-
-    // Update nodes on the canvas whenever new data is added
-    function updateNodes() {
-      // Data binding for circles (nodes)
-      const circles = nodeGroup.selectAll("circle")
-        .data(nodesData, d => d.id);
-
-      // Enter new nodes
-      circles.enter().append("circle")
-        .attr("r", 20)
-        .attr("fill", () => d3.schemeSet3[Math.floor(Math.random() * 12)])
-        .attr("class", "node")
-        .on("mouseover", (event, d) => {
-          tooltip.transition().duration(200).style("opacity", 0.9);
-          tooltip.html("<strong>" + d.name + "</strong><br>Tap for surprises!")
-            .style("left", (event.pageX + 10) + "px")
-            .style("top", (event.pageY - 28) + "px");
-        })
-        .on("mouseout", () => {
-          tooltip.transition().duration(500).style("opacity", 0);
-        })
-        .on("click", (event, d) => {
-          alert("Surprise info about: " + d.name);
-        });
-
-      // Data binding for labels
-      const labels = nodeGroup.selectAll("text")
-        .data(nodesData, d => d.id);
-
-      labels.enter().append("text")
-        .text(d => d.name)
-        .attr("font-size", "14px")
-        .attr("fill", "#333");
-
-      simulation.nodes(nodesData);
-      simulation.alpha(1).restart();
-    }
-
-    // Timer to simulate dynamic progress update, continues until externally removed
+    let progress = 0;
+    const progressText = document.getElementById('progress');
     const interval = setInterval(() => {
-      progress = (progress + 1) % 101;  // Loop progress from 0 to 100 repeatedly
-      d3.select("#progress").text("Yay, loading fun... " + progress + "%");
-      
-      // Every 5% add a new playful node
-      if (progress % 5 === 0) {
-        const newNode = { id: progress, name: "Fun " + progress };
-        nodesData.push(newNode);
-        updateNodes();
-      }
-    }, 400);
+      progress = (progress + 1) % 101;  // Loop from 0 to 100 repeatedly
+      progressText.textContent = `Loading... ${progress}%`;
+    }, 100);
     
-    // Observer to clear the interval when the loader is removed.
+    // Clear the interval when loader is removed
     const observer = new MutationObserver(mutations => {
       mutations.forEach(mutation => {
         if (!document.body.contains(document.getElementById("loader"))) {
@@ -212,10 +136,8 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
             "maxOutputTokens": max_tokens
         }
     }
-
     max_retries = 3
     retry_delay = 30  # seconds
-
     for attempt in range(max_retries):
         res = requests.post(url, headers=headers, json=payload)
         if res.status_code == 200:
@@ -230,7 +152,7 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
             else:
                 return "<p>API rate limit reached. Please try again later.</p>"
         else:
-            break  # Other errors—don't retry
+            break
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
 # --- Generate Mind Map JSON ---
