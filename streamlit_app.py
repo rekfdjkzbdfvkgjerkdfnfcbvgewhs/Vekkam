@@ -154,9 +154,12 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
 # --- Generate Study Schedule ---
+# --- Generate Study Schedule ---
 def generate_study_schedule(exam_date, syllabus):
     schedule = {}
-    days_until_exam = (exam_date - datetime.now()).days
+    # Ensure exam_date is a datetime object for subtraction
+    exam_date_datetime = datetime.combine(exam_date, datetime.min.time())
+    days_until_exam = (exam_date_datetime - datetime.now()).days
     topics_per_day = len(syllabus) // days_until_exam if days_until_exam > 0 else 1
     for i in range(days_until_exam):
         schedule[(datetime.now() + timedelta(days=i)).date()] = syllabus[i * topics_per_day:(i + 1) * topics_per_day]
