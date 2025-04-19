@@ -97,7 +97,6 @@ def extract_text(file):
         return pytesseract.image_to_string(Image.open(file))
     return ""
 
-# Detect chapters by heading patterns
 def extract_chapters(text):
     lines = text.splitlines()
     chapters = []
@@ -107,13 +106,11 @@ def extract_chapters(text):
         if m:
             title = m.group(1).strip() or "Chapter"
             chapters.append(title)
-    # Fallback: first 10 paragraphs
     if not chapters:
         paras = [p for p in text.split('\n\n') if p.strip()]
         chapters = [paras[i][:50] + '...' for i in range(min(10, len(paras)))]
     return chapters
 
-# AI call helper
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
@@ -126,28 +123,26 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
             time.sleep(30)
     return f"<p>API Error: {res.status_code}</p>"
 
-# --- Learning Aids ---
 def generate_summary(text):
     return call_gemini(f"Summarize for exam with formulae: {text}", 0.5)
 
 def generate_questions(text):
     return call_gemini(f"Generate 15 quiz questions: {text}")
 
-# Spaced repetition flashcards based on chapters
 def generate_spaced_flashcards(text):
     fronts = extract_chapters(text)
     cards = [{'Front': c, 'Back': f'Description of {c}', 'Interval': [1, 3, 7]} for c in fronts]
     return pd.DataFrame(cards)
 
-# Smart highlighting based on chapters
 def smart_highlight(text):
     return extract_chapters(text)[:5]
 
-# Practice test feedback
 def practice_test_feedback(q, a):
     return call_gemini(f"Explain why '{a}' is correct for question: {q}")
 
-# Exporters
+def predictive_analytics(text):
+    return call_gemini(f"Predict exam topics & readiness: {text}")
+
 class PDFExporter:
     @staticmethod
     def to_pdf(text, filename):
@@ -179,7 +174,6 @@ class AnkiExporter:
         genanki.Package(deck).write_to_file(path)
         return path
 
-# Voice notes & audio summaries
 def record_and_summarize():
     audio = st.file_uploader("Upload WAV/MP3 voice note:", type=["wav", "mp3"])
     if audio:
@@ -191,11 +185,6 @@ def record_and_summarize():
             st.write("**Transcript:**", text)
             st.write("**Summary:**", summary)
 
-# Predictive analytics
-def predictive_analytics(text):
-    return call_gemini(f"Predict exam topics & readiness: {text}")
-
-# Render helper
 def render_section(title, content):
     st.subheader(title)
     if isinstance(content, pd.DataFrame):
@@ -248,11 +237,18 @@ if uploaded_files:
         st.subheader("✨ Smart Highlights")
         st.write(smart_highlight(text))
 
+        st.subheader("📈 Predictive Analytics")
+        st.write(predictive_analytics(text))
+
         st.subheader("📝 Live Practice Feedback")
         q = st.text_input(f"Question for {file.name}")
         a = st.text_input(f"Answer for {file.name}")
         if st.button(f"Get Feedback for {file.name}"):
             st.write(practice_test_feedback(q, a))
+
+        if audio_enabled:
+            st.subheader("🎙️ Voice Notes")
+            record_and_summarize()
 
         if hubs_enabled and room_id:
             st.subheader("🤝 Collaborative Hubs")
@@ -270,23 +266,3 @@ if uploaded_files:
             days += 1
             st.session_state['days'] = days
         st.write(f"Study sessions logged: {days}")
-        if days >= 3:
-            st.success("🏅 Badge earned: 3-day streak!")
-
-        if export_enabled:
-            st.subheader("📤 Export & Integration")
-            if st.button("Export Notes to PDF"):
-                path = PDFExporter.to_pdf(text, file.name)
-                st.write(f"Saved to {path}")
-            if st.button("Export Flashcards to Anki"):
-                path = AnkiExporter.to_anki(df_cards)
-                st.write(f"Saved to {path}")
-
-        if audio_enabled:
-            st.subheader("🎧 Voice Notes & Audio Summaries")
-            record_and_summarize()
-
-        st.subheader("📊 Predictive Analytics")
-        st.write(predictive_analytics(text))
-else:
-    st.info("Upload documents or images to start generating your study plan and learning aids.")
