@@ -13,3 +13,4 @@ networkx
 gTTS
 fpdf
 genanki
+scikit-learn
