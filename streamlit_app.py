@@ -185,29 +185,37 @@ def generate_key_terms(text):
 def generate_cheatsheet(text): 
     return call_gemini(f"Create a cheat sheet for exams from the following text:\n\n{text}")
 
+# --- Sidebar for Selections ---
+st.sidebar.title("Choose Actions")
+summary = st.sidebar.checkbox("Summary")
+flashcards = st.sidebar.checkbox("Flashcards")
+questions = st.sidebar.checkbox("Questions")
+key_terms = st.sidebar.checkbox("Key Terms")
+mnemonics = st.sidebar.checkbox("Mnemonics")
+cheatsheet = st.sidebar.checkbox("Cheat Sheet")
+mind_map = st.sidebar.checkbox("Mind Map")
+
 # --- File Text Processing ---
 if uploaded_files:
     for file in uploaded_files:
         with st.expander(f"📄 {file.name}", expanded=False):
             text = extract_text(file)
             st.text_area("Extracted Text", text, height=200)
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button(f"📚 Summary - {file.name}"):
-                    st.markdown(generate_summary(text), unsafe_allow_html=True)
-                if st.button(f"📝 Flashcards - {file.name}"):
-                    st.markdown(generate_flashcards(text), unsafe_allow_html=True)
-            with col2:
-                if st.button(f"❓ Questions - {file.name}"):
-                    st.markdown(generate_questions(text), unsafe_allow_html=True)
-                if st.button(f"🔠 Key Terms - {file.name}"):
-                    st.markdown(generate_key_terms(text), unsafe_allow_html=True)
-            with col3:
-                if st.button(f"🧠 Mind Map - {file.name}"):
-                    map_data = get_mind_map(text)
-                    if map_data:
-                        plot_mind_map(map_data["nodes"], map_data["edges"])
-                if st.button(f"🎓 Mnemonics - {file.name}"):
-                    st.markdown(generate_mnemonics(text), unsafe_allow_html=True)
-                if st.button(f"📌 Cheat Sheet - {file.name}"):
-                    st.markdown(generate_cheatsheet(text), unsafe_allow_html=True))
+            
+            # Display selected actions
+            if summary:
+                st.markdown(generate_summary(text), unsafe_allow_html=True)
+            if flashcards:
+                st.markdown(generate_flashcards(text), unsafe_allow_html=True)
+            if questions:
+                st.markdown(generate_questions(text), unsafe_allow_html=True)
+            if key_terms:
+                st.markdown(generate_key_terms(text), unsafe_allow_html=True)
+            if mnemonics:
+                st.markdown(generate_mnemonics(text), unsafe_allow_html=True)
+            if cheatsheet:
+                st.markdown(generate_cheatsheet(text), unsafe_allow_html=True)
+            if mind_map:
+                map_data = get_mind_map(text)
+                if map_data:
+                    plot_mind_map(map_data["nodes"], map_data["edges"])
