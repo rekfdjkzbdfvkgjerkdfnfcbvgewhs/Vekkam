@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import fitz  # PyMuPDF
 import docx
@@ -14,6 +15,11 @@ import streamlit.components.v1 as components
 import time
 import networkx as nx
 from datetime import datetime, timedelta
+from fpdf import FPDF
+import genanki
+from sklearn.feature_extraction.text import TfidfVectorizer
+import pandas as pd
+import speech_recognition as sr
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
@@ -26,33 +32,28 @@ st.markdown(
 
 # --- Sidebar Feature Toggles & Inputs ---
 st.sidebar.header("🛠 Features")
-planner_enabled = st.sidebar.checkbox("AI-Powered Study Planner", value=False)
-flashcards_enabled = st.sidebar.checkbox("Spaced Repetition Flashcards", value=False)
-exam_mode = st.sidebar.checkbox("Distraction-Free Exam Mode", value=False)
-highlight_enabled = st.sidebar.checkbox("Smart Highlighting & Priority Detection", value=False)
-practice_feedback = st.sidebar.checkbox("Live Practice Test Feedback", value=False)
-hubs_enabled = st.sidebar.checkbox("Collaborative Study Hubs", value=False)
-gamification_enabled = st.sidebar.checkbox("Gamified Learning Challenges", value=False)
-export_enabled = st.sidebar.checkbox("One-Click Export & Integration", value=False)
-audio_enabled = st.sidebar.checkbox("Voice Notes & Audio Summaries", value=False)
-analytics_enabled = st.sidebar.checkbox("Predictive Exam Analytics", value=False)
+exam_date = st.sidebar.date_input("Exam Date", datetime.today().date() + timedelta(days=7))
+complexity = st.sidebar.selectbox("Syllabus Complexity", ["Low", "Medium", "High"], index=1)
+hubs_enabled = st.sidebar.checkbox("Collaborative Study Hubs")
+export_enabled = st.sidebar.checkbox("One-Click Export & Integration")
+audio_enabled = st.sidebar.checkbox("Voice Notes & Audio Summaries")
 
-# --- Planner Inputs ---
-if planner_enabled:
-    st.sidebar.subheader("Study Planner Settings")
-    exam_date = st.sidebar.date_input("Exam Date", datetime.today() + timedelta(days=7))
-    complexity = st.sidebar.selectbox("Syllabus Complexity", ["Low", "Medium", "High"], index=1)
-    goals = st.sidebar.text_area("Your Goals (comma-separated)")
-
-# --- Exam Mode Enforcement ---
+# --- Exam Mode & Pomodoro ---
+exam_mode = st.sidebar.checkbox("Distraction-Free Exam Mode")
 if exam_mode:
-    # Hide header/footer and sidebar for distraction-free interface
     st.markdown("<style>header, footer, #MainMenu, .css-1d391kg {visibility: hidden;} </style>", unsafe_allow_html=True)
     st.write("### 🛑 Exam Mode Activated")
-    # Pomodoro timer stub
-    if st.button("Start Pomodoro (25 min)"):
-        st.info("Pomodoro started! Focus for 25 minutes.")
-        # Real implementation would use session state and async timing
+    if 'pomodoro_end' not in st.session_state:
+        if st.button("Start Pomodoro (25 min)"):
+            st.session_state.pomodoro_end = time.time() + 25*60
+    else:
+        remaining = int(st.session_state.pomodoro_end - time.time())
+        if remaining > 0:
+            st.info(f"Time remaining: {remaining//60}:{remaining%60:02d}")
+            st.experimental_rerun()
+        else:
+            st.success("Pomodoro complete!")
+            del st.session_state.pomodoro_end
 
 # --- File Upload ---
 uploaded_files = st.file_uploader(
@@ -61,12 +62,17 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# --- Interactive Loader ---
-loader_html = """
-<!DOCTYPE html>
-<html lang=\"en\">...<!-- truncated for brevity -->"""  # Keep your existing loader HTML
+# --- Rooms for Collaborative Hubs ---
+if hubs_enabled:
+    room_id = st.sidebar.text_input("Room ID (shared)")
+    nickname = st.sidebar.text_input("Your Name")
+    if room_id:
+        os.makedirs("rooms", exist_ok=True)
+        room_file = os.path.join("rooms", f"{room_id}.json")
+        if not os.path.exists(room_file):
+            with open(room_file, "w") as f: json.dump([], f)
 
-# --- Core Utility Functions ---
+# --- Utility Functions ---
 def extract_text(file):
     name = file.name.lower()
     if name.endswith('.pdf'):
@@ -84,138 +90,158 @@ def extract_text(file):
         return pytesseract.image_to_string(Image.open(file))
     return ""
 
+# Extract core concepts (for study plan)
+def extract_concepts(text, top_n=10):
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=top_n)
+    X = vectorizer.fit_transform([text])
+    return list(vectorizer.get_feature_names_out())
 
+# AI call helper
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens}
-    }
-    for attempt in range(3):
+    payload = {"contents":[{"parts":[{"text":prompt}]}], "generationConfig":{"temperature":temperature,"maxOutputTokens":max_tokens}}
+    for _ in range(3):
         res = requests.post(url, headers=headers, json=payload)
         if res.status_code == 200:
-            try:
-                return res.json()['candidates'][0]['content']['parts'][0]['text']
-            except:
-                return "<p>Error parsing AI response.</p>"
-        if res.status_code == 429 and attempt < 2:
+            return res.json()['candidates'][0]['content']['parts'][0]['text']
+        if res.status_code == 429:
             time.sleep(30)
-            continue
-        break
-    return f"<p>API Error {res.status_code}</p>"
+    return f"<p>API Error: {res.status_code}</p>"
 
-# --- AI Learning Aids ---
-def generate_summary(text): return call_gemini(f"Summarize for exam with formulae: {text}", temperature=0.5)
+# --- Learning Aids ---
+def generate_summary(text): return call_gemini(f"Summarize for exam with formulae: {text}", 0.5)
 def generate_questions(text): return call_gemini(f"Generate 15 quiz questions: {text}")
-def generate_flashcards(text): return call_gemini(f"Create flashcards (Q&A): {text}")
-def generate_mnemonics(text): return call_gemini(f"Generate mnemonics: {text}")
-def generate_key_terms(text): return call_gemini(f"List 10 key terms: {text}")
-def generate_cheatsheet(text): return call_gemini(f"Create cheat sheet: {text}")
-def generate_highlights(text): return call_gemini(f"List key highlights: {text}")
 
-# --- New Feature Stubs ---
-def generate_study_plan(date, complexity, goals):
-    return f"Study plan for {date.strftime('%Y-%m-%d')} (Complexity: {complexity}) with goals: {goals}"
-
+# Spaced repetition flashcards
 def generate_spaced_flashcards(text):
-    return call_gemini(f"Create spaced repetition flashcards: {text}")
+    concepts = extract_concepts(text, top_n=20)
+    cards = [{'Front':c, 'Back':f'Definition of {c}', 'Interval':[1,3,7]} for c in concepts]
+    return pd.DataFrame(cards)
 
+# Smart highlighting
 def smart_highlight(text):
-    return call_gemini(f"Highlight high-yield concepts: {text}")
+    return extract_concepts(text, top_n=5)
 
-def practice_test_feedback(q, a):
-    return call_gemini(f"Explain why '{a}' is correct for question: {q}")
+# Practice test feedback
+def practice_test_feedback(q,a): return call_gemini(f"Explain why '{a}' is correct for question: {q}")
 
-def export_notes(format):
-    st.success(f"Notes exported as {format}")
+# Export functions
+class PDFExporter:
+    @staticmethod
+    def to_pdf(text, filename):
+        os.makedirs('exports', exist_ok=True)
+        pdf = FPDF(); pdf.add_page(); pdf.set_font('Arial', size=12)
+        for line in text.split('\n'): pdf.multi_cell(0,10,line)
+        path = f"exports/{filename}.pdf"; pdf.output(path)
+        return path
 
-def record_voice_note():
-    st.warning("Voice note recording not yet supported.")
+class AnkiExporter:
+    @staticmethod
+    def to_anki(df):
+        model = genanki.Model(1607392319, 'SimpleModel', fields=[{'name':'Front'},{'name':'Back'}],
+            templates=[{'name':'Card 1','qfmt':'{{Front}}','afmt':'{{FrontSide}}<hr>{{Back}}'}])
+        deck = genanki.Deck(2059400110, 'VekkamDeck')
+        for _,row in df.iterrows(): deck.add_note(genanki.Note(model=model, fields=[row['Front'],row['Back']]))
+        os.makedirs('exports', exist_ok=True)
+        path = 'exports/vekkam.apkg'; genanki.Package(deck).write_to_file(path)
+        return path
 
-def predictive_analytics(text):
-    return call_gemini(f"Predict exam topics & readiness: {text}")
+# Voice notes & audio summaries
+def record_and_summarize():
+    audio = st.file_uploader("Upload WAV/MP3 voice note:", type=["wav","mp3"])
+    if audio:
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio) as source:
+            data = recognizer.record(source)
+            text = recognizer.recognize_google(data)
+            summary = generate_summary(text)
+            st.write("**Transcript:**", text)
+            st.write("**Summary:**", summary)
 
-# --- Render Helpers ---
+# Predictive analytics
+def predictive_analytics(text): return call_gemini(f"Predict exam topics & readiness: {text}")
+
+# Render helper
 def render_section(title, content):
     st.subheader(title)
-    if content.strip().startswith('<'):
-        components.html(content, height=400)
-    else:
-        st.markdown(content, unsafe_allow_html=True)
+    if isinstance(content, pd.DataFrame): st.dataframe(content)
+    elif isinstance(content, list): st.write(content)
+    else: st.markdown(content, unsafe_allow_html=True)
 
-# --- Main App Logic ---
-# Loader placeholder until first file is processed
-authored = False
+# --- Main Logic ---
 if uploaded_files:
-    loader = st.empty()
-    with loader:
-        components.html(loader_html, height=500)
-
-    # Planner
-    if planner_enabled:
-        st.header("📅 AI Study Planner")
-        plan = generate_study_plan(exam_date, complexity, goals)
-        st.write(plan)
-
     for file in uploaded_files:
         st.markdown(f"---\n## 📄 {file.name}")
         text = extract_text(file)
 
-        # Mind Map
-        mind_map = None  # existing code omitted for brevity
-        # ... keep your get_mind_map & plot_mind_map here ...
+        # 1) Extract concepts and auto-generate plan
+        concepts = extract_concepts(text, top_n=10)
+        st.subheader("🗂️ Key Concepts Detected")
+        st.write(concepts)
+        plan_df = pd.DataFrame([
+            {'Date': (exam_date - timedelta(days=(i* ((exam_date - datetime.today().date()).days)//len(concepts)))).isoformat(),
+             'Concept':concepts[i]}
+            for i in range(len(concepts))
+        ])
+        st.subheader("📅 Auto-Generated Study Plan")
+        st.dataframe(plan_df)
 
-        # Core Sections
+        # 2) Standard summaries & questions
         render_section("📌 Summary", generate_summary(text))
         render_section("📝 Quiz Questions", generate_questions(text))
-        with st.expander("📚 Flashcards"):
-            render_section("Flashcards", generate_flashcards(text))
-        with st.expander("🧠 Mnemonics"):
-            render_section("Mnemonics", generate_mnemonics(text))
-        with st.expander("🔑 Key Terms"):
-            render_section("Key Terms", generate_key_terms(text))
-        with st.expander("📋 Cheat Sheet"):
-            render_section("Cheat Sheet", generate_cheatsheet(text))
-        with st.expander("⭐ Highlights"):
-            render_section("Highlights", generate_highlights(text))
 
-        # New Features per-file
-        if flashcards_enabled:
-            st.subheader("🎴 Spaced Repetition Flashcards")
-            st.markdown(generate_spaced_flashcards(text))
-        if highlight_enabled:
-            st.subheader("✨ Smart Highlighting")
-            st.markdown(smart_highlight(text))
-        if practice_feedback:
-            st.subheader("📝 Live Practice Feedback")
-            q = st.text_input(f"Question for {file.name}")
-            a = st.text_input(f"Your answer for {file.name}")
-            if st.button(f"Get Feedback for {file.name}"):
-                st.markdown(practice_test_feedback(q, a))
-        if hubs_enabled:
+        # 3) Flashcards
+        st.subheader("🎴 Spaced Repetition Flashcards")
+        df_cards = generate_spaced_flashcards(text)
+        st.dataframe(df_cards)
+
+        # 4) Smart highlights
+        st.subheader("✨ Smart Highlights")
+        st.write(smart_highlight(text))
+
+        # 5) Practice feedback
+        st.subheader("📝 Live Practice Feedback")
+        q = st.text_input(f"Question for {file.name}")
+        a = st.text_input(f"Answer for {file.name}")
+        if st.button(f"Get Feedback for {file.name}"):
+            st.write(practice_test_feedback(q,a))
+
+        # 6) Collaborative hubs
+        if hubs_enabled and room_id:
             st.subheader("🤝 Collaborative Hubs")
-            st.info("Virtual rooms coming soon.")
-        if gamification_enabled:
-            st.subheader("🏆 Gamified Challenges")
-            st.info("Track badges & streaks.")
+            new_msg = st.text_input("Type a message...")
+            if st.button("Send"):
+                msgs = json.load(open(room_file))
+                msgs.append({'name':nickname,'msg':new_msg})
+                json.dump(msgs, open(room_file,'w'))
+            st.write("**Chat:**")
+            for m in json.load(open(room_file)): st.write(f"**{m['name']}:** {m['msg']}")
+
+        # 7) Gamification: streaks
+        days = st.session_state.get('days',0)
+        if st.button("Log Study Session"):
+            days+=1; st.session_state['days']=days
+        st.write(f"Study sessions logged: {days}")
+        if days>=3: st.success("🏅 Badge earned: 3-day streak!")
+
+        # 8) Export
         if export_enabled:
             st.subheader("📤 Export & Integration")
-            if st.button("Export to Anki"):
-                export_notes("Anki .apkg")
-            if st.button("Export to PDF"):
-                export_notes("PDF")
+            if st.button("Export Notes to PDF"):
+                path = PDFExporter.to_pdf(text,file.name)
+                st.write(f"Saved to {path}")
+            if st.button("Export Flashcards to Anki"):
+                path = AnkiExporter.to_anki(df_cards)
+                st.write(f"Saved to {path}")
+
+        # 9) Audio
         if audio_enabled:
             st.subheader("🎧 Voice Notes & Audio Summaries")
-            if st.button("Record Voice Note"):
-                record_voice_note()
-            st.audio(generate_summary(text))
-        if analytics_enabled:
-            st.subheader("📊 Predictive Analytics")
-            st.markdown(predictive_analytics(text))
+            record_and_summarize()
 
-        if not authored:
-            loader.empty()
-            authored = True
+        # 10) Predictive analytics
+        st.subheader("📊 Predictive Analytics")
+        st.write(predictive_analytics(text))
 else:
-    st.info("Upload a document to get started.")
+    st.info("Upload documents or images to start generating your study plan and learning aids.")
