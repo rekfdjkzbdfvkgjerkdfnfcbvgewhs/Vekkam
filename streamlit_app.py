@@ -50,7 +50,7 @@ if exam_mode:
         remaining = int(st.session_state.pomodoro_end - time.time())
         if remaining > 0:
             st.info(f"Time remaining: {remaining//60}:{remaining%60:02d}")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.success("Pomodoro complete!")
             del st.session_state.pomodoro_end
