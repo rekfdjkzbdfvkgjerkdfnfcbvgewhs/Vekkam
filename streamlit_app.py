@@ -162,6 +162,37 @@ if uploaded_files:
                     os.remove(audio_file_path)
                 else:
                     st.warning("No output generated for audio. Please select one or more options.")
+def generate_summary(text):
+    prompt = f"Please provide a summary of the following text:\n\n{text}"
+    return call_gemini(prompt)
+
+def generate_flashcards(text):
+    prompt = f"Generate flashcards based on the following text:\n\n{text}"
+    return call_gemini(prompt)
+
+def generate_questions(text):
+    prompt = f"Create a set of questions based on the following text:\n\n{text}"
+    return call_gemini(prompt)
+
+def generate_key_terms(text):
+    prompt = f"Extract the key terms from the following text:\n\n{text}"
+    return call_gemini(prompt)
+
+def generate_mnemonics(text):
+    prompt = f"Generate mnemonics based on the following text:\n\n{text}"
+    return call_gemini(prompt)
+
+def generate_cheatsheet(text):
+    prompt = f"Create a cheat sheet from the following text:\n\n{text}"
+    return call_gemini(prompt)
+
+def simplify_concept(text):
+    prompt = f"Simplify the following concept for easier understanding:\n\n{text}"
+    return call_gemini(prompt)
+
+def highlight_important_topics(text):
+    prompt = f"Highlight the important exam topics in the following text:\n\n{text}"
+    return call_gemini(prompt)
 
 # --- Generate Question Paper in Professor Mode ---
 if professor_mode:
