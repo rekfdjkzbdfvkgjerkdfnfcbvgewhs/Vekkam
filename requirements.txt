@@ -15,3 +15,4 @@ fpdf
 genanki
 scikit-learn
 pandas
+speech_recognition
