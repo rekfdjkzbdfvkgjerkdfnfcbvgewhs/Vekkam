@@ -210,4 +210,4 @@ if uploaded_files:
                 if st.button(f"🎓 Mnemonics - {file.name}"):
                     st.markdown(generate_mnemonics(text), unsafe_allow_html=True)
                 if st.button(f"📌 Cheat Sheet - {file.name}"):
-                    st.markdown(generate_cheatsheet(text), unsafe_allow_html=True))
+                    st.markdown(generate_cheatsheet(text), unsafe_allow_html=True)
