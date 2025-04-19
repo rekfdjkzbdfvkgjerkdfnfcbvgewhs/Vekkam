@@ -51,7 +51,7 @@ if exam_mode:
         if remaining > 0:
             st.info(f"Time remaining: {remaining//60}:{remaining%60:02d}")
             try:
-                st.rerun()
+                st.experimental_rerun()
             except AttributeError:
                 try:
                     st.rerun()
@@ -76,7 +76,8 @@ if hubs_enabled:
         os.makedirs("rooms", exist_ok=True)
         room_file = os.path.join("rooms", f"{room_id}.json")
         if not os.path.exists(room_file):
-            with open(room_file, "w") as f: json.dump([], f)
+            with open(room_file, "w") as f:
+                json.dump([], f)
 
 # --- Utility Functions ---
 def extract_text(file):
@@ -126,56 +127,83 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
     return f"<p>API Error: {res.status_code}</p>"
 
 # --- Learning Aids ---
-def generate_summary(text): return call_gemini(f"Summarize for exam with formulae: {text}", 0.5)
-def generate_questions(text): return call_gemini(f"Generate 15 quiz questions: {text}")
+def generate_summary(text):
+    return call_gemini(f"Summarize for exam with formulae: {text}", 0.5)
 
+def generate_questions(text):
+    return call_gemini(f"Generate 15 quiz questions: {text}")
+
+# Spaced repetition flashcards based on chapters
 def generate_spaced_flashcards(text):
     fronts = extract_chapters(text)
-    cards = [{'Front':c, 'Back':f'Description of {c}', 'Interval':[1,3,7]} for c in fronts]
+    cards = [{'Front': c, 'Back': f'Description of {c}', 'Interval': [1, 3, 7]} for c in fronts]
     return pd.DataFrame(cards)
 
+# Smart highlighting based on chapters
 def smart_highlight(text):
     return extract_chapters(text)[:5]
 
-def practice_test_feedback(q,a): return call_gemini(f"Explain why '{a}' is correct for question: {q}")
+# Practice test feedback
+def practice_test_feedback(q, a):
+    return call_gemini(f"Explain why '{a}' is correct for question: {q}")
 
 # Exporters
 class PDFExporter:
     @staticmethod
     def to_pdf(text, filename):
         os.makedirs('exports', exist_ok=True)
-        pdf = FPDF(); pdf.add_page(); pdf.set_font('Arial', size=12)
-        for line in text.split('\n'): pdf.multi_cell(0,10,line)
-        path = f"exports/{filename}.pdf"; pdf.output(path)
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font('Arial', size=12)
+        for line in text.split('\n'):
+            pdf.multi_cell(0, 10, line)
+        path = f"exports/{filename}.pdf"
+        pdf.output(path)
         return path
 
 class AnkiExporter:
     @staticmethod
     def to_anki(df):
-        model = genanki.Model(1607392319, 'SimpleModel', fields=[{'name':'Front'},{'name':'Back'}],
-            templates=[{'name':'Card 1','qfmt':'{{Front}}','afmt':'{{FrontSide}}<hr>{{Back}}'}])
+        model = genanki.Model(
+            1607392319, 'SimpleModel',
+            fields=[{'name': 'Front'}, {'name': 'Back'}],
+            templates=[{'name': 'Card 1','qfmt': '{{Front}}','afmt': '{{FrontSide}}<hr>{{Back}}'}]
+        )
         deck = genanki.Deck(2059400110, 'VekkamDeck')
-        for _,row in df.iterrows(): deck.add_note(genanki.Note(model=model, fields=[row['Front'],row['Back']]))
+        for _, row in df.iterrows():
+            deck.add_note(
+                genanki.Note(model=model, fields=[row['Front'], row['Back']])
+            )
         os.makedirs('exports', exist_ok=True)
-        path = 'exports/vekkam.apkg'; genanki.Package(deck).write_to_file(path)
+        path = 'exports/vekkam.apkg'
+        genanki.Package(deck).write_to_file(path)
         return path
-    def record_and_summarize():
-        audio = st.file_uploader("Upload WAV/MP3 voice note:", type=["wav","mp3"])
-        if audio:
-            recognizer = sr.Recognizer()
-            with sr.AudioFile(audio) as source:
-                data = recognizer.record(source)
-                text = recognizer.recognize_google(data)
-                summary = generate_summary(text)
-                st.write("**Transcript:**", text)
-                st.write("**Summary:**", summary)
-    def predictive_analytics(text): return call_gemini(f"Predict exam topics & readiness: {text}")
-    
-    def render_section(title, content):
-        st.subheader(title)
-        if isinstance(content, pd.DataFrame): st.dataframe(content)
-        elif isinstance(content, list): st.write(content)
-        else: st.markdown(content, unsafe_allow_html=True)
+
+# Voice notes & audio summaries
+def record_and_summarize():
+    audio = st.file_uploader("Upload WAV/MP3 voice note:", type=["wav", "mp3"])
+    if audio:
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio) as source:
+            data = recognizer.record(source)
+            text = recognizer.recognize_google(data)
+            summary = generate_summary(text)
+            st.write("**Transcript:**", text)
+            st.write("**Summary:**", summary)
+
+# Predictive analytics
+def predictive_analytics(text):
+    return call_gemini(f"Predict exam topics & readiness: {text}")
+
+# Render helper
+def render_section(title, content):
+    st.subheader(title)
+    if isinstance(content, pd.DataFrame):
+        st.dataframe(content)
+    elif isinstance(content, list):
+        st.write(content)
+    else:
+        st.markdown(content, unsafe_allow_html=True)
 
 # --- Main Logic ---
 if uploaded_files:
@@ -187,7 +215,7 @@ if uploaded_files:
             chapters = extract_chapters(text)
             st.subheader("📚 Chapters Detected")
             st.write(chapters)
-            # AI-powered scheduling
+
             prompt = (
                 f"Create a JSON study schedule assigning each chapter to dates between "
                 f"{datetime.today().date().isoformat()} and {exam_date.isoformat()} "
@@ -200,12 +228,11 @@ if uploaded_files:
                 sched = json.loads(sched_text)
                 df_plan = pd.DataFrame(sched)
             except Exception:
-                # Fallback to even split
                 days_total = (exam_date - datetime.today().date()).days or 1
                 interval = days_total // len(chapters)
                 plan = []
-                for i,chap in enumerate(chapters):
-                    day = datetime.today().date() + timedelta(days=i*interval)
+                for i, chap in enumerate(chapters):
+                    day = datetime.today().date() + timedelta(days=i * interval)
                     plan.append({'Date': day.isoformat(), 'Chapter': chap})
                 df_plan = pd.DataFrame(plan)
             st.subheader("📅 AI-Generated Study Plan by Chapter")
@@ -213,42 +240,53 @@ if uploaded_files:
 
         render_section("📌 Summary", generate_summary(text))
         render_section("📝 Quiz Questions", generate_questions(text))
-        df_cards = generate_spaced_flashcards(text)
+
         st.subheader("🎴 Spaced Repetition Flashcards")
+        df_cards = generate_spaced_flashcards(text)
         st.dataframe(df_cards)
+
         st.subheader("✨ Smart Highlights")
         st.write(smart_highlight(text))
+
         st.subheader("📝 Live Practice Feedback")
         q = st.text_input(f"Question for {file.name}")
         a = st.text_input(f"Answer for {file.name}")
         if st.button(f"Get Feedback for {file.name}"):
-            st.write(practice_test_feedback(q,a))
+            st.write(practice_test_feedback(q, a))
+
         if hubs_enabled and room_id:
             st.subheader("🤝 Collaborative Hubs")
             new_msg = st.text_input("Type a message...")
             if st.button("Send"):
                 msgs = json.load(open(room_file))
-                msgs.append({'name':nickname,'msg':new_msg})
-                json.dump(msgs, open(room_file,'w'))
+                msgs.append({'name': nickname, 'msg': new_msg})
+                json.dump(msgs, open(room_file, 'w'))
             st.write("**Chat:**")
-            for m in json.load(open(room_file)): st.write(f"**{m['name']}:** {m['msg']}")
-        days = st.session_state.get('days',0)
+            for m in json.load(open(room_file)):
+                st.write(f"**{m['name']}:** {m['msg']}")
+
+        days = st.session_state.get('days', 0)
         if st.button("Log Study Session"):
-            days+=1; st.session_state['days']=days
+            days += 1
+            st.session_state['days'] = days
         st.write(f"Study sessions logged: {days}")
-        if days>=3: st.success("🏅 Badge earned: 3-day streak!")
+        if days >= 3:
+            st.success("🏅 Badge earned: 3-day streak!")
+
         if export_enabled:
             st.subheader("📤 Export & Integration")
             if st.button("Export Notes to PDF"):
-                path = PDFExporter.to_pdf(text,file.name)
+                path = PDFExporter.to_pdf(text, file.name)
                 st.write(f"Saved to {path}")
             if st.button("Export Flashcards to Anki"):
                 path = AnkiExporter.to_anki(df_cards)
                 st.write(f"Saved to {path}")
+
         if audio_enabled:
             st.subheader("🎧 Voice Notes & Audio Summaries")
             record_and_summarize()
+
         st.subheader("📊 Predictive Analytics")
         st.write(predictive_analytics(text))
 else:
-    st.info("Upload documents or images to start generating your study plan an
+    st.info("Upload documents or images to start generating your study plan and learning aids.")
