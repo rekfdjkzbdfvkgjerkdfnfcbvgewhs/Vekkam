@@ -14,6 +14,9 @@ import streamlit.components.v1 as components
 import time
 import networkx as nx
 import tempfile
+from gtts import gTTS
+import os
+from fpdf import FPDF  # To generate PDF for question papers
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
@@ -79,111 +82,16 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
             break
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
-# --- Mind Map ---
-def get_mind_map(text):
+# --- Professor Mode - Question Paper Generation ---
+def generate_question_paper(topics, difficulty, question_type):
     prompt = f"""
-You are an assistant that creates a JSON mind map from the text below.
+Generate a question paper on the following topics: {topics}. 
+The difficulty level is {difficulty}. 
+The type of questions is {question_type}.
 
-Structure:
-{{
-  "nodes": [{{"id": "1", "label": "Label", "description": "Short definition"}}],
-  "edges": [{{"source": "1", "target": "2"}}]
-}}
-
-IMPORTANT:
-- Output only valid JSON.
-- Do NOT include markdown, explanation, or commentary.
-- Ensure both "nodes" and "edges" are present.
-- Include a short definition/description as applicable for each of the bubbles in the mind map.
-- Keep it short and sweet so that it looks clean.
-- Generate 5 children each from 7 total nodes.
-- It's for a test I have tomorrow.
-- If there's any formulae you see, give a few questions on that as well.
-
-Output only the questions.
-Text:
-{text}
+Please provide the questions and their corresponding answers in a clear and organized format.
 """
-    response = call_gemini(prompt, temperature=0.5)
-    try:
-        json_data = re.search(r'\{.*\}', response, re.DOTALL)
-        if not json_data:
-            raise ValueError("No JSON block found.")
-        cleaned = re.sub(r",\s*([}\]])", r"\\1", json_data.group(0))
-        parsed = json.loads(cleaned)
-        if "nodes" not in parsed or "edges" not in parsed:
-            raise ValueError("Response missing 'nodes' or 'edges'.")
-        return parsed
-    except Exception as e:
-        st.error(f"Mind map JSON parsing failed: {e}")
-        st.code(response)
-        return None
-
-# --- Plot Mind Map ---
-def plot_mind_map(nodes, edges):
-    if len(nodes) < 2:
-        st.warning("Mind map needs at least 2 nodes.")
-        return
-    id_to_index = {node['id']: i for i, node in enumerate(nodes)}
-    g = ig.Graph(directed=True)
-    g.add_vertices(len(nodes))
-    valid_edges = []
-    for e in edges:
-        src = e['source']
-        tgt = e['target']
-        if src in id_to_index and tgt in id_to_index:
-            valid_edges.append((id_to_index[src], id_to_index[tgt]))
-    g.add_edges(valid_edges)
-    try:
-        layout = g.layout("kk")
-    except:
-        layout = g.layout("fr")
-    scale = 3
-    edge_x, edge_y = [], []
-    for e in g.es:
-        x0, y0 = layout[e.source]
-        x1, y1 = layout[e.target]
-        edge_x += [x0 * scale, x1 * scale, None]
-        edge_y += [y0 * scale, y1 * scale, None]
-    node_x, node_y, hover_labels = [], [], []
-    for i, node in enumerate(nodes):
-        x, y = layout[i]
-        node_x.append(x * scale)
-        node_y.append(y * scale)
-        label = node['label']
-        desc = node.get('description', 'No description.')
-        hover_labels.append(f"<b>{label}</b><br>{desc}")
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
-    node_trace = go.Scatter(
-        x=node_x, y=node_y, mode='markers+text',
-        text=[node['label'] for node in nodes],
-        textposition="top center",
-        marker=dict(size=20, color='#00cc96', line_width=2),
-        hoverinfo='text',
-        hovertext=hover_labels
-    )
-    fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
-        title="🧠 Mind Map (ChatGPT can't do this)",
-        width=1200, height=800,
-        hovermode='closest',
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
-    ))
-    components.html(fig.to_html(full_html=False, include_plotlyjs='cdn'), height=900, scrolling=True)
-
-# --- AI Learning Aids ---
-def generate_summary(text): 
-    return call_gemini(f"Summarize this for an exam and separately list any formulae that are mentioned in the text. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
-def generate_questions(text): 
-    return call_gemini(f"Generate 15 quiz questions for an exam (ignore authors, ISSN, etc.):\n\n{text}")
-def generate_flashcards(text): 
-    return call_gemini(f"Create flashcards (Q&A):\n\n{text}")
-def generate_mnemonics(text): 
-    return call_gemini(f"Generate mnemonics:\n\n{text}")
-def generate_key_terms(text): 
-    return call_gemini(f"List 10 key terms with definitions:\n\n{text}")
-def generate_cheatsheet(text): 
-    return call_gemini(f"Create a cheat sheet for exams from the following text:\n\n{text}")
+    return call_gemini(prompt, temperature=0.8)
 
 # --- Sidebar for Selections ---
 st.sidebar.title("Choose Actions")
@@ -194,6 +102,17 @@ key_terms = st.sidebar.checkbox("Key Terms")
 mnemonics = st.sidebar.checkbox("Mnemonics")
 cheatsheet = st.sidebar.checkbox("Cheat Sheet")
 mind_map = st.sidebar.checkbox("Mind Map")
+generate_audio = st.sidebar.checkbox("Generate Podcast-Style Audio")
+simplify = st.sidebar.checkbox("Dumb Down Concepts")
+highlight = st.sidebar.checkbox("Highlight Important Topics")
+professor_mode = st.sidebar.checkbox("Professor Mode")
+
+# --- Professor Mode Inputs ---
+if professor_mode:
+    st.sidebar.header("Professor Mode - Create Your Own Question Paper")
+    topics_input = st.sidebar.text_area("Enter Topics for the Question Paper", "e.g., Economics, Algebra, Physics")
+    difficulty = st.sidebar.selectbox("Select Difficulty Level", ["Easy", "Medium", "Hard"])
+    question_type = st.sidebar.selectbox("Select Question Type", ["Multiple Choice", "Short Answer", "Long Answer"])
 
 # --- File Text Processing ---
 if uploaded_files:
@@ -202,19 +121,66 @@ if uploaded_files:
             text = extract_text(file)
 
             # Display selected actions outside the text box
+            output_text = ""
+
             if summary:
-                st.markdown(generate_summary(text), unsafe_allow_html=True)
+                output_text += generate_summary(text)
             if flashcards:
-                st.markdown(generate_flashcards(text), unsafe_allow_html=True)
+                output_text += generate_flashcards(text)
             if questions:
-                st.markdown(generate_questions(text), unsafe_allow_html=True)
+                output_text += generate_questions(text)
             if key_terms:
-                st.markdown(generate_key_terms(text), unsafe_allow_html=True)
+                output_text += generate_key_terms(text)
             if mnemonics:
-                st.markdown(generate_mnemonics(text), unsafe_allow_html=True)
+                output_text += generate_mnemonics(text)
             if cheatsheet:
-                st.markdown(generate_cheatsheet(text), unsafe_allow_html=True)
+                output_text += generate_cheatsheet(text)
             if mind_map:
                 map_data = get_mind_map(text)
                 if map_data:
                     plot_mind_map(map_data["nodes"], map_data["edges"])
+
+            # Simplify concepts if selected
+            if simplify:
+                if output_text:
+                    output_text = simplify_concept(output_text)
+
+            # Highlight important topics if selected
+            if highlight:
+                important_topics = highlight_important_topics(text)
+                if important_topics:
+                    output_text += "\n\n**Important Exam Topics:**\n" + important_topics
+
+            # Generate podcast-style audio if selected
+            if generate_audio:
+                if output_text:
+                    tts = gTTS(text=output_text, lang='en', slow=False)
+                    audio_file_path = tempfile.mktemp(suffix=".mp3")
+                    tts.save(audio_file_path)
+                    audio_file = open(audio_file_path, "rb")
+                    st.audio(audio_file, format="audio/mp3", caption="Podcast-Style Audio Output")
+                    os.remove(audio_file_path)
+                else:
+                    st.warning("No output generated for audio. Please select one or more options.")
+
+# --- Generate Question Paper in Professor Mode ---
+if professor_mode:
+    if st.sidebar.button("Generate Question Paper"):
+        if topics_input:
+            question_paper = generate_question_paper(topics_input, difficulty, question_type)
+            st.subheader("Generated Question Paper")
+            st.write(question_paper)
+            
+            # Allow user to download the question paper as a PDF
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+            pdf.cell(200, 10, txt=f"Question Paper on {topics_input} - Difficulty: {difficulty} - Type: {question_type}", ln=True)
+            pdf.multi_cell(200, 10, txt=question_paper)
+            pdf_output = tempfile.mktemp(suffix=".pdf")
+            pdf.output(pdf_output)
+
+            with open(pdf_output, "rb") as f:
+                st.download_button("Download Question Paper as PDF", f, file_name="question_paper.pdf")
+        else:
+            st.warning("Please enter topics for the question paper.")
