@@ -16,3 +16,4 @@ genanki
 scikit-learn
 pandas
 SpeechRecognition
+deep-translator
