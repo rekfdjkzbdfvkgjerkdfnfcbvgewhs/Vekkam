@@ -17,7 +17,6 @@ import networkx as nx
 from datetime import datetime, timedelta
 from fpdf import FPDF
 import genanki
-from sklearn.feature_extraction.text import TfidfVectorizer
 import pandas as pd
 import speech_recognition as sr
 
@@ -37,6 +36,7 @@ complexity = st.sidebar.selectbox("Syllabus Complexity", ["Low", "Medium", "High
 hubs_enabled = st.sidebar.checkbox("Collaborative Study Hubs")
 export_enabled = st.sidebar.checkbox("One-Click Export & Integration")
 audio_enabled = st.sidebar.checkbox("Voice Notes & Audio Summaries")
+enable_planner = st.sidebar.checkbox("Auto Study Plan by Chapters (AI)", value=True)
 
 # --- Exam Mode & Pomodoro ---
 exam_mode = st.sidebar.checkbox("Distraction-Free Exam Mode")
@@ -50,7 +50,13 @@ if exam_mode:
         remaining = int(st.session_state.pomodoro_end - time.time())
         if remaining > 0:
             st.info(f"Time remaining: {remaining//60}:{remaining%60:02d}")
-            st.rerun()
+            try:
+                st.rerun()
+            except AttributeError:
+                try:
+                    st.rerun()
+                except AttributeError:
+                    pass
         else:
             st.success("Pomodoro complete!")
             del st.session_state.pomodoro_end
@@ -90,11 +96,21 @@ def extract_text(file):
         return pytesseract.image_to_string(Image.open(file))
     return ""
 
-# Extract core concepts (for study plan)
-def extract_concepts(text, top_n=10):
-    vectorizer = TfidfVectorizer(stop_words='english', max_features=top_n)
-    X = vectorizer.fit_transform([text])
-    return list(vectorizer.get_feature_names_out())
+# Detect chapters by heading patterns
+def extract_chapters(text):
+    lines = text.splitlines()
+    chapters = []
+    pattern = re.compile(r'^(?:Chapter|CHAPTER)\s*\d+[:.\-]?\s*(.*)', re.IGNORECASE)
+    for line in lines:
+        m = pattern.match(line.strip())
+        if m:
+            title = m.group(1).strip() or "Chapter"
+            chapters.append(title)
+    # Fallback: first 10 paragraphs
+    if not chapters:
+        paras = [p for p in text.split('\n\n') if p.strip()]
+        chapters = [paras[i][:50] + '...' for i in range(min(10, len(paras)))]
+    return chapters
 
 # AI call helper
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
@@ -113,20 +129,17 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
 def generate_summary(text): return call_gemini(f"Summarize for exam with formulae: {text}", 0.5)
 def generate_questions(text): return call_gemini(f"Generate 15 quiz questions: {text}")
 
-# Spaced repetition flashcards
 def generate_spaced_flashcards(text):
-    concepts = extract_concepts(text, top_n=20)
-    cards = [{'Front':c, 'Back':f'Definition of {c}', 'Interval':[1,3,7]} for c in concepts]
+    fronts = extract_chapters(text)
+    cards = [{'Front':c, 'Back':f'Description of {c}', 'Interval':[1,3,7]} for c in fronts]
     return pd.DataFrame(cards)
 
-# Smart highlighting
 def smart_highlight(text):
-    return extract_concepts(text, top_n=5)
+    return extract_chapters(text)[:5]
 
-# Practice test feedback
 def practice_test_feedback(q,a): return call_gemini(f"Explain why '{a}' is correct for question: {q}")
 
-# Export functions
+# Exporters
 class PDFExporter:
     @staticmethod
     def to_pdf(text, filename):
@@ -147,8 +160,7 @@ class AnkiExporter:
         path = 'exports/vekkam.apkg'; genanki.Package(deck).write_to_file(path)
         return path
 
-# Voice notes & audio summaries
-def record_and_summarize():
+ def record_and_summarize():
     audio = st.file_uploader("Upload WAV/MP3 voice note:", type=["wav","mp3"])
     if audio:
         recognizer = sr.Recognizer()
@@ -159,10 +171,8 @@ def record_and_summarize():
             st.write("**Transcript:**", text)
             st.write("**Summary:**", summary)
 
-# Predictive analytics
 def predictive_analytics(text): return call_gemini(f"Predict exam topics & readiness: {text}")
 
-# Render helper
 def render_section(title, content):
     st.subheader(title)
     if isinstance(content, pd.DataFrame): st.dataframe(content)
@@ -175,39 +185,46 @@ if uploaded_files:
         st.markdown(f"---\n## 📄 {file.name}")
         text = extract_text(file)
 
-        # 1) Extract concepts and auto-generate plan
-        concepts = extract_concepts(text, top_n=10)
-        st.subheader("🗂️ Key Concepts Detected")
-        st.write(concepts)
-        plan_df = pd.DataFrame([
-            {'Date': (exam_date - timedelta(days=(i* ((exam_date - datetime.today().date()).days)//len(concepts)))).isoformat(),
-             'Concept':concepts[i]}
-            for i in range(len(concepts))
-        ])
-        st.subheader("📅 Auto-Generated Study Plan")
-        st.dataframe(plan_df)
+        if enable_planner:
+            chapters = extract_chapters(text)
+            st.subheader("📚 Chapters Detected")
+            st.write(chapters)
+            # AI-powered scheduling
+            prompt = (
+                f"Create a JSON study schedule assigning each chapter to dates between "
+                f"{datetime.today().date().isoformat()} and {exam_date.isoformat()} "
+                f"based on syllabus complexity '{complexity}'. "
+                f"Output as a JSON list of {{\"Date\": \"YYYY-MM-DD\", \"Chapter\": \"...\"}}. "
+                f"Chapters: {chapters}."
+            )
+            sched_text = call_gemini(prompt)
+            try:
+                sched = json.loads(sched_text)
+                df_plan = pd.DataFrame(sched)
+            except Exception:
+                # Fallback to even split
+                days_total = (exam_date - datetime.today().date()).days or 1
+                interval = days_total // len(chapters)
+                plan = []
+                for i,chap in enumerate(chapters):
+                    day = datetime.today().date() + timedelta(days=i*interval)
+                    plan.append({'Date': day.isoformat(), 'Chapter': chap})
+                df_plan = pd.DataFrame(plan)
+            st.subheader("📅 AI-Generated Study Plan by Chapter")
+            st.dataframe(df_plan)
 
-        # 2) Standard summaries & questions
         render_section("📌 Summary", generate_summary(text))
         render_section("📝 Quiz Questions", generate_questions(text))
-
-        # 3) Flashcards
-        st.subheader("🎴 Spaced Repetition Flashcards")
         df_cards = generate_spaced_flashcards(text)
+        st.subheader("🎴 Spaced Repetition Flashcards")
         st.dataframe(df_cards)
-
-        # 4) Smart highlights
         st.subheader("✨ Smart Highlights")
         st.write(smart_highlight(text))
-
-        # 5) Practice feedback
         st.subheader("📝 Live Practice Feedback")
         q = st.text_input(f"Question for {file.name}")
         a = st.text_input(f"Answer for {file.name}")
         if st.button(f"Get Feedback for {file.name}"):
             st.write(practice_test_feedback(q,a))
-
-        # 6) Collaborative hubs
         if hubs_enabled and room_id:
             st.subheader("🤝 Collaborative Hubs")
             new_msg = st.text_input("Type a message...")
@@ -217,15 +234,11 @@ if uploaded_files:
                 json.dump(msgs, open(room_file,'w'))
             st.write("**Chat:**")
             for m in json.load(open(room_file)): st.write(f"**{m['name']}:** {m['msg']}")
-
-        # 7) Gamification: streaks
         days = st.session_state.get('days',0)
         if st.button("Log Study Session"):
             days+=1; st.session_state['days']=days
         st.write(f"Study sessions logged: {days}")
         if days>=3: st.success("🏅 Badge earned: 3-day streak!")
-
-        # 8) Export
         if export_enabled:
             st.subheader("📤 Export & Integration")
             if st.button("Export Notes to PDF"):
@@ -234,14 +247,10 @@ if uploaded_files:
             if st.button("Export Flashcards to Anki"):
                 path = AnkiExporter.to_anki(df_cards)
                 st.write(f"Saved to {path}")
-
-        # 9) Audio
         if audio_enabled:
             st.subheader("🎧 Voice Notes & Audio Summaries")
             record_and_summarize()
-
-        # 10) Predictive analytics
         st.subheader("📊 Predictive Analytics")
         st.write(predictive_analytics(text))
 else:
-    st.info("Upload documents or images to start generating your study plan and learning aids.")
+    st.info("Upload documents or images to start generating your study plan an
