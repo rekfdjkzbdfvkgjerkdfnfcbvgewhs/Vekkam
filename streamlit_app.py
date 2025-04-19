@@ -9,14 +9,10 @@ import pytesseract
 import plotly.graph_objects as go
 import igraph as ig
 import requests
-from pptx import Presentation
 import streamlit.components.v1 as components
 import time
-import networkx as nx
-import tempfile
-from gtts import gTTS
-import os
-from fpdf import FPDF  # To generate PDF for question papers
+from pptx import Presentation
+from datetime import datetime, timedelta
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
@@ -36,6 +32,81 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
+# --- Interactive Loader HTML ---
+loader_html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brainrot Loader</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
+      overflow: hidden;
+      text-align: center;
+    }
+    #loader {
+      width: 100%;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #progress {
+      font-size: 30px;
+      margin-top: 30px;
+      color: #ff4500;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    .mascot {
+      width: 150px;
+      height: 150px;
+      background: url('mascot.png') no-repeat center center;
+      background-size: contain;
+      animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+  </style>
+</head>
+<body>
+  <div id="loader">
+    <div class="mascot"></div>
+    <div id="progress">Loading... 0%</div>
+  </div>
+  <script>
+    let progress = 0;
+    const progressText = document.getElementById('progress');
+    const interval = setInterval(() => {
+      progress = (progress + 1) % 101;
+      progressText.textContent = `Loading... ${progress}%`;
+    }, 550);
+    
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        if (!document.body.contains(document.getElementById("loader"))) {
+          clearInterval(interval);
+        }
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  </script>
+</body>
+</html>
+"""
+
 # --- Text Extraction ---
 def extract_text(file):
     ext = file.name.lower()
@@ -54,7 +125,7 @@ def extract_text(file):
 
 # --- Gemini API Call ---
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['GEMINI_API_KEY']}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -82,136 +153,89 @@ def call_gemini(prompt, temperature=0.7, max_tokens=8192):
             break
     return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
-# --- Professor Mode - Question Paper Generation ---
-def generate_question_paper(topics, difficulty, question_type):
-    prompt = f"""
-Generate a question paper on the following topics: {topics}. 
-The difficulty level is {difficulty}. 
-The type of questions is {question_type}.
+# --- Generate Study Schedule ---
+def generate_study_schedule(exam_date, syllabus):
+    schedule = {}
+    days_until_exam = (exam_date - datetime.now()).days
+    topics_per_day = len(syllabus) // days_until_exam if days_until_exam > 0 else 1
+    for i in range(days_until_exam):
+        schedule[(datetime.now() + timedelta(days=i)).date()] = syllabus[i * topics_per_day:(i + 1) * topics_per_day]
+    return schedule
 
-Please provide the questions and their corresponding answers in a clear and organized format.
-"""
-    return call_gemini(prompt, temperature=0.8)
+# --- AI Learning Aids ---
+def generate_summary(text): 
+    return call_gemini(f"Summarize this for an exam:\n\n{text}", temperature=0.5)
+def generate_questions(text): 
+    return call_gemini(f"Generate 15 quiz questions for an exam:\n\n{text}")
+def generate_flashcards(text): 
+    return call_gemini(f"Create flashcards (Q&A):\n\n{text}")
+def generate_mnemonics(text): 
+    return call_gemini(f"Generate mnemonics:\n\n{text}")
+def generate_key_terms(text): 
+    return call_gemini(f"List 10 key terms with definitions:\n\n{text}")
+def generate_cheatsheet(text): 
+    return call_gemini(f"Create a cheat sheet:\n\n{text}")
+def generate_highlights(text): 
+    return call_gemini(f"List key facts and highlights:\n\n{text}")
 
-# --- Sidebar for Selections ---
-st.sidebar.title("Choose Actions")
-summary = st.sidebar.checkbox("Summary")
-flashcards = st.sidebar.checkbox("Flashcards")
-questions = st.sidebar.checkbox("Questions")
-key_terms = st.sidebar.checkbox("Key Terms")
-mnemonics = st.sidebar.checkbox("Mnemonics")
-cheatsheet = st.sidebar.checkbox("Cheat Sheet")
-mind_map = st.sidebar.checkbox("Mind Map")
-generate_audio = st.sidebar.checkbox("Generate Podcast-Style Audio")
-simplify = st.sidebar.checkbox("Dumb Down Concepts")
-highlight = st.sidebar.checkbox("Highlight Important Topics")
-professor_mode = st.sidebar.checkbox("Professor Mode")
+# --- Display Helper ---
+def render_section(title, content):
+    st.subheader(title)
+    if content.strip().startswith("<"):
+        components.html(content, height=600, scrolling=True)
+    else:
+        st.markdown(content, unsafe_allow_html=True)
 
-# --- Professor Mode Inputs ---
-if professor_mode:
-    st.sidebar.header("Professor Mode - Create Your Own Question Paper")
-    topics_input = st.sidebar.text_area("Enter Topics for the Question Paper", "e.g., Economics, Algebra, Physics")
-    difficulty = st.sidebar.selectbox("Select Difficulty Level", ["Easy", "Medium", "Hard"])
-    question_type = st.sidebar.selectbox("Select Question Type", ["Multiple Choice", "Short Answer", "Long Answer"])
-
-# --- File Text Processing ---
+# --- Main Logic ---
 if uploaded_files:
+    loader_placeholder = st.empty()
+    with loader_placeholder:
+        components.html(loader_html, height=600)
+    
+    first_file_processed = False
+
     for file in uploaded_files:
-        with st.expander(f"📄 {file.name}", expanded=False):
-            text = extract_text(file)
+        st.markdown(f"---\n## 📄 {file.name}")
+        text = extract_text(file)
+        syllabus = text.splitlines()  # Assuming each line is a topic for the study schedule
+        exam_date = st.date_input("Select Exam Date", datetime.now())
 
-            # Display selected actions outside the text box
-            output_text = ""
+        if st.button("Generate Study Schedule"):
+            schedule = generate_study_schedule(exam_date, syllabus)
+            st.write("Your Study Schedule:")
+            for date, topics in schedule.items():
+                st.write(f"{date}: {', '.join(topics)}")
 
-            if summary:
-                output_text += generate_summary(text)
-            if flashcards:
-                output_text += generate_flashcards(text)
-            if questions:
-                output_text += generate_questions(text)
-            if key_terms:
-                output_text += generate_key_terms(text)
-            if mnemonics:
-                output_text += generate_mnemonics(text)
-            if cheatsheet:
-                output_text += generate_cheatsheet(text)
-            if mind_map:
-                map_data = get_mind_map(text)
-                if map_data:
-                    plot_mind_map(map_data["nodes"], map_data["edges"])
+        mind_map = get_mind_map(text)
+        summary = generate_summary(text)
+        questions = generate_questions(text)
+        flashcards = generate_flashcards(text)
+        mnemonics = generate_mnemonics(text)
+        key_terms = generate_key_terms(text)
+        cheatsheet = generate_cheatsheet(text)
+        highlights = generate_highlights(text)
 
-            # Simplify concepts if selected
-            if simplify:
-                if output_text:
-                    output_text = simplify_concept(output_text)
-
-            # Highlight important topics if selected
-            if highlight:
-                important_topics = highlight_important_topics(text)
-                if important_topics:
-                    output_text += "\n\n**Important Exam Topics:**\n" + important_topics
-
-            # Generate podcast-style audio if selected
-            if generate_audio:
-                if output_text:
-                    tts = gTTS(text=output_text, lang='en', slow=False)
-                    audio_file_path = tempfile.mktemp(suffix=".mp3")
-                    tts.save(audio_file_path)
-                    audio_file = open(audio_file_path, "rb")
-                    st.audio(audio_file, format="audio/mp3", caption="Podcast-Style Audio Output")
-                    os.remove(audio_file_path)
-                else:
-                    st.warning("No output generated for audio. Please select one or more options.")
-def generate_summary(text):
-    prompt = f"Please provide a summary of the following text:\n\n{text}"
-    return call_gemini(prompt)
-
-def generate_flashcards(text):
-    prompt = f"Generate flashcards based on the following text:\n\n{text}"
-    return call_gemini(prompt)
-
-def generate_questions(text):
-    prompt = f"Create a set of questions based on the following text:\n\n{text}"
-    return call_gemini(prompt)
-
-def generate_key_terms(text):
-    prompt = f"Extract the key terms from the following text:\n\n{text}"
-    return call_gemini(prompt)
-
-def generate_mnemonics(text):
-    prompt = f"Generate mnemonics based on the following text:\n\n{text}"
-    return call_gemini(prompt)
-
-def generate_cheatsheet(text):
-    prompt = f"Create a cheat sheet from the following text:\n\n{text}"
-    return call_gemini(prompt)
-
-def simplify_concept(text):
-    prompt = f"Simplify the following concept for easier understanding:\n\n{text}"
-    return call_gemini(prompt)
-
-def highlight_important_topics(text):
-    prompt = f"Highlight the important exam topics in the following text:\n\n{text}"
-    return call_gemini(prompt)
-
-# --- Generate Question Paper in Professor Mode ---
-if professor_mode:
-    if st.sidebar.button("Generate Question Paper"):
-        if topics_input:
-            question_paper = generate_question_paper(topics_input, difficulty, question_type)
-            st.subheader("Generated Question Paper")
-            st.write(question_paper)
-            
-            # Allow user to download the question paper as a PDF
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", size=12)
-            pdf.cell(200, 10, txt=f"Question Paper on {topics_input} - Difficulty: {difficulty} - Type: {question_type}", ln=True)
-            pdf.multi_cell(200, 10, txt=question_paper)
-            pdf_output = tempfile.mktemp(suffix=".pdf")
-            pdf.output(pdf_output)
-
-            with open(pdf_output, "rb") as f:
-                st.download_button("Download Question Paper as PDF", f, file_name="question_paper.pdf")
+        if mind_map:
+            st.subheader("🧠 Mind Map (ChatGPT can't do this)")
+            plot_mind_map(mind_map["nodes"], mind_map["edges"])
         else:
-            st.warning("Please enter topics for the question paper.")
+            st.error("Mind map generation failed.")
+
+        render_section("📌 Summary", summary)
+        render_section("📝 Quiz Questions", questions)
+        with st.expander("📚 Flashcards"):
+            render_section("Flashcards", flashcards)
+        with st.expander("🧠 Mnemonics"):
+            render_section("Mnemonics", mnemonics)
+        with st.expander("🔑 Key Terms"):
+            render_section("Key Terms", key_terms)
+        with st.expander("📋 Cheat Sheet"):
+            render_section("Cheat Sheet", cheatsheet)
+        with st.expander("⭐ Highlights"):
+            render_section("Highlights", highlights)
+        
+        if not first_file_processed:
+            loader_placeholder.empty()
+            first_file_processed = True
+else:
+    st.info("Upload a document to get started.")
