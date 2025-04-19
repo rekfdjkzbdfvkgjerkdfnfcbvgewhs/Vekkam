@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 import fitz  # PyMuPDF
 import docx
@@ -14,52 +13,18 @@ from pptx import Presentation
 import streamlit.components.v1 as components
 import time
 import networkx as nx
-from datetime import datetime, timedelta
-from fpdf import FPDF
-import genanki
-import pandas as pd
-import speech_recognition as sr
+import tempfile
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
-st.markdown(
-    """
+st.markdown("""
     <div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
         <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
     </div>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# --- Sidebar Feature Toggles & Inputs ---
-st.sidebar.header("🛠 Features")
-exam_date = st.sidebar.date_input("Exam Date", datetime.today().date() + timedelta(days=7))
-complexity = st.sidebar.selectbox("Syllabus Complexity", ["Low", "Medium", "High"], index=1)
-hubs_enabled = st.sidebar.checkbox("Collaborative Study Hubs")
-export_enabled = st.sidebar.checkbox("One-Click Export & Integration")
-audio_enabled = st.sidebar.checkbox("Voice Notes & Audio Summaries")
-enable_planner = st.sidebar.checkbox("Auto Study Plan by Chapters (AI)", value=True)
-
-# --- Exam Mode & Pomodoro ---
-exam_mode = st.sidebar.checkbox("Distraction-Free Exam Mode")
-if exam_mode:
-    st.markdown("<style>header, footer, #MainMenu, .css-1d391kg {visibility: hidden;} </style>", unsafe_allow_html=True)
-    st.write("### 🛑 Exam Mode Activated")
-    if 'pomodoro_end' not in st.session_state:
-        if st.button("Start Pomodoro (25 min)"):
-            st.session_state.pomodoro_end = time.time() + 25*60
-    else:
-        remaining = int(st.session_state.pomodoro_end - time.time())
-        if remaining > 0:
-            st.info(f"Time remaining: {remaining//60}:{remaining%60:02d}")
-            try:
-                st.experimental_rerun()
-            except AttributeError:
-                try:
-                    st.rerun()
-                except AttributeError:
-                    pass
-        else:
-            st.success("Pomodoro complete!")
-            del st.session_state.pomodoro_end
+st.title("Vekkam - the Study Buddy of Your Dreams")
+st.info("Upload files to generate summaries, mind maps, flashcards, and more. We do what ChatGPT and NotebookLM by Google can't do.")
 
 # --- File Upload ---
 uploaded_files = st.file_uploader(
@@ -68,201 +33,181 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# --- Rooms for Collaborative Hubs ---
-if hubs_enabled:
-    room_id = st.sidebar.text_input("Room ID (shared)")
-    nickname = st.sidebar.text_input("Your Name")
-    if room_id:
-        os.makedirs("rooms", exist_ok=True)
-        room_file = os.path.join("rooms", f"{room_id}.json")
-        if not os.path.exists(room_file):
-            with open(room_file, "w") as f:
-                json.dump([], f)
-
-# --- Utility Functions ---
+# --- Text Extraction ---
 def extract_text(file):
-    name = file.name.lower()
-    if name.endswith('.pdf'):
-        with fitz.open(stream=file.read(), filetype='pdf') as doc:
+    ext = file.name.lower()
+    if ext.endswith(".pdf"):
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
             return "".join([page.get_text() for page in doc])
-    if name.endswith('.docx'):
+    elif ext.endswith(".docx"):
         return "\n".join(p.text for p in docx.Document(file).paragraphs)
-    if name.endswith('.pptx'):
-        return "\n".join(
-            shape.text for slide in Presentation(file).slides for shape in slide.shapes if hasattr(shape, 'text')
-        )
-    if name.endswith('.txt'):
-        return StringIO(file.getvalue().decode('utf-8')).read()
-    if name.endswith(('.jpg', '.jpeg', '.png')):
+    elif ext.endswith(".pptx"):
+        return "\n".join(shape.text for slide in Presentation(file).slides for shape in slide.shapes if hasattr(shape, "text"))
+    elif ext.endswith(".txt"):
+        return StringIO(file.getvalue().decode("utf-8")).read()
+    elif ext.endswith((".jpg", ".jpeg", ".png")):
         return pytesseract.image_to_string(Image.open(file))
     return ""
 
-def extract_chapters(text):
-    lines = text.splitlines()
-    chapters = []
-    pattern = re.compile(r'^(?:Chapter|CHAPTER)\s*\d+[:.\-]?\s*(.*)', re.IGNORECASE)
-    for line in lines:
-        m = pattern.match(line.strip())
-        if m:
-            title = m.group(1).strip() or "Chapter"
-            chapters.append(title)
-    if not chapters:
-        paras = [p for p in text.split('\n\n') if p.strip()]
-        chapters = [paras[i][:50] + '...' for i in range(min(10, len(paras)))]
-    return chapters
-
+# --- Gemini API Call ---
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
-    payload = {"contents":[{"parts":[{"text":prompt}]}], "generationConfig":{"temperature":temperature,"maxOutputTokens":max_tokens}}
-    for _ in range(3):
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens
+        }
+    }
+    max_retries = 3
+    retry_delay = 30  # seconds
+    for attempt in range(max_retries):
         res = requests.post(url, headers=headers, json=payload)
         if res.status_code == 200:
-            return res.json()['candidates'][0]['content']['parts'][0]['text']
-        if res.status_code == 429:
-            time.sleep(30)
-    return f"<p>API Error: {res.status_code}</p>"
+            try:
+                return res.json()["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception as e:
+                return f"<p>Error parsing response: {e}</p>"
+        elif res.status_code == 429:
+            if attempt < max_retries - 1:
+                st.warning("Rate limit reached. Retrying in 30 seconds...")
+                time.sleep(retry_delay)
+            else:
+                return "<p>API rate limit reached. Please try again later.</p>"
+        else:
+            break
+    return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
 
-def generate_summary(text):
-    return call_gemini(f"Summarize for exam with formulae: {text}", 0.5)
+# --- Mind Map ---
+def get_mind_map(text):
+    prompt = f"""
+You are an assistant that creates a JSON mind map from the text below.
 
-def generate_questions(text):
-    return call_gemini(f"Generate 15 quiz questions: {text}")
+Structure:
+{{
+  "nodes": [{{"id": "1", "label": "Label", "description": "Short definition"}}],
+  "edges": [{{"source": "1", "target": "2"}}]
+}}
 
-def generate_spaced_flashcards(text):
-    fronts = extract_chapters(text)
-    cards = [{'Front': c, 'Back': f'Description of {c}', 'Interval': [1, 3, 7]} for c in fronts]
-    return pd.DataFrame(cards)
+IMPORTANT:
+- Output only valid JSON.
+- Do NOT include markdown, explanation, or commentary.
+- Ensure both "nodes" and "edges" are present.
+- Include a short definition/description as applicable for each of the bubbles in the mind map.
+- Keep it short and sweet so that it looks clean.
+- Generate 5 children each from 7 total nodes.
+- It's for a test I have tomorrow.
+- If there's any formulae you see, give a few questions on that as well.
 
-def smart_highlight(text):
-    return extract_chapters(text)[:5]
+Output only the questions.
+Text:
+{text}
+"""
+    response = call_gemini(prompt, temperature=0.5)
+    try:
+        json_data = re.search(r'\{.*\}', response, re.DOTALL)
+        if not json_data:
+            raise ValueError("No JSON block found.")
+        cleaned = re.sub(r",\s*([}\]])", r"\\1", json_data.group(0))
+        parsed = json.loads(cleaned)
+        if "nodes" not in parsed or "edges" not in parsed:
+            raise ValueError("Response missing 'nodes' or 'edges'.")
+        return parsed
+    except Exception as e:
+        st.error(f"Mind map JSON parsing failed: {e}")
+        st.code(response)
+        return None
 
-def practice_test_feedback(q, a):
-    return call_gemini(f"Explain why '{a}' is correct for question: {q}")
+# --- Plot Mind Map ---
+def plot_mind_map(nodes, edges):
+    if len(nodes) < 2:
+        st.warning("Mind map needs at least 2 nodes.")
+        return
+    id_to_index = {node['id']: i for i, node in enumerate(nodes)}
+    g = ig.Graph(directed=True)
+    g.add_vertices(len(nodes))
+    valid_edges = []
+    for e in edges:
+        src = e['source']
+        tgt = e['target']
+        if src in id_to_index and tgt in id_to_index:
+            valid_edges.append((id_to_index[src], id_to_index[tgt]))
+    g.add_edges(valid_edges)
+    try:
+        layout = g.layout("kk")
+    except:
+        layout = g.layout("fr")
+    scale = 3
+    edge_x, edge_y = [], []
+    for e in g.es:
+        x0, y0 = layout[e.source]
+        x1, y1 = layout[e.target]
+        edge_x += [x0 * scale, x1 * scale, None]
+        edge_y += [y0 * scale, y1 * scale, None]
+    node_x, node_y, hover_labels = [], [], []
+    for i, node in enumerate(nodes):
+        x, y = layout[i]
+        node_x.append(x * scale)
+        node_y.append(y * scale)
+        label = node['label']
+        desc = node.get('description', 'No description.')
+        hover_labels.append(f"<b>{label}</b><br>{desc}")
+    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
+    node_trace = go.Scatter(
+        x=node_x, y=node_y, mode='markers+text',
+        text=[node['label'] for node in nodes],
+        textposition="top center",
+        marker=dict(size=20, color='#00cc96', line_width=2),
+        hoverinfo='text',
+        hovertext=hover_labels
+    )
+    fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
+        title="🧠 Mind Map (ChatGPT can't do this)",
+        width=1200, height=800,
+        hovermode='closest',
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+    ))
+    components.html(fig.to_html(full_html=False, include_plotlyjs='cdn'), height=900, scrolling=True)
 
-def predictive_analytics(text):
-    return call_gemini(f"Predict exam topics & readiness: {text}")
+# --- AI Learning Aids ---
+def generate_summary(text): 
+    return call_gemini(f"Summarize this for an exam and separately list any formulae that are mentioned in the text. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
+def generate_questions(text): 
+    return call_gemini(f"Generate 15 quiz questions for an exam (ignore authors, ISSN, etc.):\n\n{text}")
+def generate_flashcards(text): 
+    return call_gemini(f"Create flashcards (Q&A):\n\n{text}")
+def generate_mnemonics(text): 
+    return call_gemini(f"Generate mnemonics:\n\n{text}")
+def generate_key_terms(text): 
+    return call_gemini(f"List 10 key terms with definitions:\n\n{text}")
+def generate_cheatsheet(text): 
+    return call_gemini(f"Create a cheat sheet for exams from the following text:\n\n{text}")
 
-class PDFExporter:
-    @staticmethod
-    def to_pdf(text, filename):
-        os.makedirs('exports', exist_ok=True)
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font('Arial', size=12)
-        for line in text.split('\n'):
-            pdf.multi_cell(0, 10, line)
-        path = f"exports/{filename}.pdf"
-        pdf.output(path)
-        return path
-
-class AnkiExporter:
-    @staticmethod
-    def to_anki(df):
-        model = genanki.Model(
-            1607392319, 'SimpleModel',
-            fields=[{'name': 'Front'}, {'name': 'Back'}],
-            templates=[{'name': 'Card 1','qfmt': '{{Front}}','afmt': '{{FrontSide}}<hr>{{Back}}'}]
-        )
-        deck = genanki.Deck(2059400110, 'VekkamDeck')
-        for _, row in df.iterrows():
-            deck.add_note(
-                genanki.Note(model=model, fields=[row['Front'], row['Back']])
-            )
-        os.makedirs('exports', exist_ok=True)
-        path = 'exports/vekkam.apkg'
-        genanki.Package(deck).write_to_file(path)
-        return path
-
-def record_and_summarize():
-    audio = st.file_uploader("Upload WAV/MP3 voice note:", type=["wav", "mp3"])
-    if audio:
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(audio) as source:
-            data = recognizer.record(source)
-            text = recognizer.recognize_google(data)
-            summary = generate_summary(text)
-            st.write("**Transcript:**", text)
-            st.write("**Summary:**", summary)
-
-def render_section(title, content):
-    st.subheader(title)
-    if isinstance(content, pd.DataFrame):
-        st.dataframe(content)
-    elif isinstance(content, list):
-        st.write(content)
-    else:
-        st.markdown(content, unsafe_allow_html=True)
-
-# --- Main Logic ---
+# --- File Text Processing ---
 if uploaded_files:
     for file in uploaded_files:
-        st.markdown(f"---\n## 📄 {file.name}")
-        text = extract_text(file)
-
-        if enable_planner:
-            chapters = extract_chapters(text)
-            st.subheader("📚 Chapters Detected")
-            st.write(chapters)
-
-            prompt = (
-                f"Create a JSON study schedule assigning each chapter to dates between "
-                f"{datetime.today().date().isoformat()} and {exam_date.isoformat()} "
-                f"based on syllabus complexity '{complexity}'. "
-                f"Output as a JSON list of {{\"Date\": \"YYYY-MM-DD\", \"Chapter\": \"...\"}}. "
-                f"Chapters: {chapters}."
-            )
-            sched_text = call_gemini(prompt)
-            try:
-                sched = json.loads(sched_text)
-                df_plan = pd.DataFrame(sched)
-            except Exception:
-                days_total = (exam_date - datetime.today().date()).days or 1
-                interval = days_total // len(chapters)
-                plan = []
-                for i, chap in enumerate(chapters):
-                    day = datetime.today().date() + timedelta(days=i * interval)
-                    plan.append({'Date': day.isoformat(), 'Chapter': chap})
-                df_plan = pd.DataFrame(plan)
-            st.subheader("📅 AI-Generated Study Plan by Chapter")
-            st.dataframe(df_plan)
-
-        render_section("📌 Summary", generate_summary(text))
-        render_section("📝 Quiz Questions", generate_questions(text))
-
-        st.subheader("🎴 Spaced Repetition Flashcards")
-        df_cards = generate_spaced_flashcards(text)
-        st.dataframe(df_cards)
-
-        st.subheader("✨ Smart Highlights")
-        st.write(smart_highlight(text))
-
-        st.subheader("📈 Predictive Analytics")
-        st.write(predictive_analytics(text))
-
-        st.subheader("📝 Live Practice Feedback")
-        q = st.text_input(f"Question for {file.name}")
-        a = st.text_input(f"Answer for {file.name}")
-        if st.button(f"Get Feedback for {file.name}"):
-            st.write(practice_test_feedback(q, a))
-
-        if audio_enabled:
-            st.subheader("🎙️ Voice Notes")
-            record_and_summarize()
-
-        if hubs_enabled and room_id:
-            st.subheader("🤝 Collaborative Hubs")
-            new_msg = st.text_input("Type a message...")
-            if st.button("Send"):
-                msgs = json.load(open(room_file))
-                msgs.append({'name': nickname, 'msg': new_msg})
-                json.dump(msgs, open(room_file, 'w'))
-            st.write("**Chat:**")
-            for m in json.load(open(room_file)):
-                st.write(f"**{m['name']}:** {m['msg']}")
-
-        days = st.session_state.get('days', 0)
-        if st.button("Log Study Session"):
-            days += 1
-            st.session_state['days'] = days
-        st.write(f"Study sessions logged: {days}")
+        with st.expander(f"📄 {file.name}", expanded=False):
+            text = extract_text(file)
+            st.text_area("Extracted Text", text, height=200)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button(f"📚 Summary - {file.name}"):
+                    st.markdown(generate_summary(text), unsafe_allow_html=True)
+                if st.button(f"📝 Flashcards - {file.name}"):
+                    st.markdown(generate_flashcards(text), unsafe_allow_html=True)
+            with col2:
+                if st.button(f"❓ Questions - {file.name}"):
+                    st.markdown(generate_questions(text), unsafe_allow_html=True)
+                if st.button(f"🔠 Key Terms - {file.name}"):
+                    st.markdown(generate_key_terms(text), unsafe_allow_html=True)
+            with col3:
+                if st.button(f"🧠 Mind Map - {file.name}"):
+                    map_data = get_mind_map(text)
+                    if map_data:
+                        plot_mind_map(map_data["nodes"], map_data["edges"])
+                if st.button(f"🎓 Mnemonics - {file.name}"):
+                    st.markdown(generate_mnemonics(text), unsafe_allow_html=True)
+                if st.button(f"📌 Cheat Sheet - {file.name}"):
+                    st.markdown(generate_cheatsheet(text), unsafe_allow_html=True))
