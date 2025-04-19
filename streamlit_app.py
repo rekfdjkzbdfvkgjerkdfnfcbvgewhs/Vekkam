@@ -160,24 +160,24 @@ class AnkiExporter:
         path = 'exports/vekkam.apkg'; genanki.Package(deck).write_to_file(path)
         return path
 
- def record_and_summarize():
-    audio = st.file_uploader("Upload WAV/MP3 voice note:", type=["wav","mp3"])
-    if audio:
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(audio) as source:
-            data = recognizer.record(source)
-            text = recognizer.recognize_google(data)
-            summary = generate_summary(text)
-            st.write("**Transcript:**", text)
-            st.write("**Summary:**", summary)
-
-def predictive_analytics(text): return call_gemini(f"Predict exam topics & readiness: {text}")
-
-def render_section(title, content):
-    st.subheader(title)
-    if isinstance(content, pd.DataFrame): st.dataframe(content)
-    elif isinstance(content, list): st.write(content)
-    else: st.markdown(content, unsafe_allow_html=True)
+     def record_and_summarize():
+        audio = st.file_uploader("Upload WAV/MP3 voice note:", type=["wav","mp3"])
+        if audio:
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(audio) as source:
+                data = recognizer.record(source)
+                text = recognizer.recognize_google(data)
+                summary = generate_summary(text)
+                st.write("**Transcript:**", text)
+                st.write("**Summary:**", summary)
+    
+    def predictive_analytics(text): return call_gemini(f"Predict exam topics & readiness: {text}")
+    
+    def render_section(title, content):
+        st.subheader(title)
+        if isinstance(content, pd.DataFrame): st.dataframe(content)
+        elif isinstance(content, list): st.write(content)
+        else: st.markdown(content, unsafe_allow_html=True)
 
 # --- Main Logic ---
 if uploaded_files:
