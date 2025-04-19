@@ -200,9 +200,8 @@ if uploaded_files:
     for file in uploaded_files:
         with st.expander(f"📄 {file.name}", expanded=False):
             text = extract_text(file)
-            st.text_area("Extracted Text", text, height=200)
-            
-            # Display selected actions
+
+            # Display selected actions outside the text box
             if summary:
                 st.markdown(generate_summary(text), unsafe_allow_html=True)
             if flashcards:
