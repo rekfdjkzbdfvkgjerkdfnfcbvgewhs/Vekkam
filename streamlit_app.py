@@ -266,19 +266,6 @@ def generate_highlights(text):
     return call_gemini(f"List key facts and highlights:\n\n{text}")
 def critical_concepts(text):
         return call_gemini(f"Dumb down the critical concepts in the text so that I am ready for questions in the exam:\n\n{text}")
-def generate_podcast(text):
-    return call_gemini(f"You're NotebookLM. Make a podcast script for a single speaker taking the user through the whole document in detail. This is the doc: \n\n{text}")
-def text_to_speech(text, filename="podcast.mp3"):
-    tts = gTTS(text)
-    tts.save(filename)
-
-# --- Display Helper ---
-def render_section(title, content):
-    st.subheader(title)
-    if content.strip().startswith("<"):
-        components.html(content, height=600, scrolling=True)
-    else:
-        st.markdown(content, unsafe_allow_html=True)
 
 # --- Main Logic ---
 if uploaded_files:
@@ -301,12 +288,6 @@ if uploaded_files:
         cheatsheet = generate_cheatsheet(text)
         highlights = generate_highlights(text)
         critical_concepts = critical_concepts(text)
-        audio_path = generate_podcast(text_to_speech(text, filename="podcast.mp3"))
-        if mind_map:
-            st.subheader("🧠 Mind Map (ChatGPT can't do this)")
-            plot_mind_map(mind_map["nodes"], mind_map["edges"])
-        else:
-            st.error("Mind map generation failed.")
 
         render_section("📌 Summary", summary)
         render_section("📝 Quiz Questions (You gotta ask ChatGPT for this, we do it anyways)", questions)
@@ -322,9 +303,6 @@ if uploaded_files:
             render_section("Highlights", highlights)
         with st.expander("All the critical concepts in a crisp bite for you"):
             render_section("Critical Concepts", critical_concepts)
-        with st.expander("🎧 Listen to the Podcast Summary"):
-            with open(audio_path, "rb") as audio_file:
-                st.audio(audio_file.read(), format="audio/mp3")
                 
         # Remove the loader after processing the first file.
         if not first_file_processed:
