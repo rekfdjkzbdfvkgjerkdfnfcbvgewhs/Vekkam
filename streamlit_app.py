@@ -250,7 +250,7 @@ def plot_mind_map(nodes, edges):
 
 # --- AI Learning Aids ---
 def generate_summary(text): 
-    return call_gemini(f"Summarize this for an exam and separately list any formulae that are mentioned in the text. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
+    return call_gemini(f"Summarize this for an exam and separately list all the formulae that are mentioned in the text and define the terms therein. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
 def generate_questions(text): 
     return call_gemini(f"Generate 15 quiz questions for an exam (ignore authors, ISSN, etc.):\n\n{text}")
 def generate_flashcards(text): 
@@ -258,7 +258,7 @@ def generate_flashcards(text):
 def generate_mnemonics(text): 
     return call_gemini(f"Generate mnemonics:\n\n{text}")
 def generate_key_terms(text): 
-    return call_gemini(f"List 10 key terms with definitions:\n\n{text}")
+    return call_gemini(f"List all key terms in the text, with definitions:\n\n{text}")
 def generate_cheatsheet(text): 
     return call_gemini(f"Create a cheat sheet:\n\n{text}")
 def generate_highlights(text): 
