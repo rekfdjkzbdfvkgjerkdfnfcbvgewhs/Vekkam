@@ -267,7 +267,7 @@ def critical_concepts(text):
         return call_gemini(f"Dumb down the critical concepts in the text so that I am ready for questions in the exam:\n\n{text}")
 def generate_podcast(text):
     return call_gemini(f"You're NotebookLM. Make a podcast script for a single speaker taking the user through the whole document in detail. This is the doc: \n\n{text}")
-def text_to_speech(text, filename="critical_concepts_podcast.mp3"):
+def text_to_speech(text, filename="podcast.mp3"):
     tts = gTTS(text)
     tts.save(filename)
 
@@ -300,7 +300,7 @@ if uploaded_files:
         cheatsheet = generate_cheatsheet(text)
         highlights = generate_highlights(text)
         critical_concepts = critical_concepts(text)
-        audio_path = generate_podcast(text)
+        audio_path = generate_podcast(text_to_speech(text, filename="podcast.mp3"))
         if mind_map:
             st.subheader("🧠 Mind Map (ChatGPT can't do this)")
             plot_mind_map(mind_map["nodes"], mind_map["edges"])
