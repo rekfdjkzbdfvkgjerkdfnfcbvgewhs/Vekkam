@@ -13,7 +13,6 @@ from pptx import Presentation
 import streamlit.components.v1 as components
 import time
 import networkx as nx
-from gtts import gTTS
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
@@ -129,7 +128,7 @@ def extract_text(file):
 
 # --- Gemini API Call ---
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={st.secrets['gemini_api_key']}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -267,6 +266,14 @@ def generate_highlights(text):
 def critical_concepts(text):
         return call_gemini(f"Dumb down the critical concepts in the text so that I am ready for questions in the exam:\n\n{text}")
 
+# --- Display Helper ---
+def render_section(title, content):
+    st.subheader(title)
+    if content.strip().startswith("<"):
+        components.html(content, height=600, scrolling=True)
+    else:
+        st.markdown(content, unsafe_allow_html=True)
+
 # --- Main Logic ---
 if uploaded_files:
     # Create a placeholder for the interactive loader, visible until first file processing completes.
@@ -289,6 +296,12 @@ if uploaded_files:
         highlights = generate_highlights(text)
         critical_concepts = critical_concepts(text)
 
+        if mind_map:
+            st.subheader("🧠 Mind Map (ChatGPT can't do this)")
+            plot_mind_map(mind_map["nodes"], mind_map["edges"])
+        else:
+            st.error("Mind map generation failed.")
+
         render_section("📌 Summary", summary)
         render_section("📝 Quiz Questions (You gotta ask ChatGPT for this, we do it anyways)", questions)
         with st.expander("📚 Flashcards (Wonder what this is? ChatGPT don't do it, do they?)"):
@@ -303,7 +316,7 @@ if uploaded_files:
             render_section("Highlights", highlights)
         with st.expander("All the critical concepts in a crisp bite for you"):
             render_section("Critical Concepts", critical_concepts)
-                
+        
         # Remove the loader after processing the first file.
         if not first_file_processed:
             loader_placeholder.empty()
