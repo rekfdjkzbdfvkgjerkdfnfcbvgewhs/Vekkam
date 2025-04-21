@@ -10,7 +10,7 @@ pytesseract
 python-pptx
 html2text
 networkx
-gTTS
+gtts
 fpdf
 genanki
 scikit-learn
