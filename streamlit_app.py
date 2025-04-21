@@ -13,7 +13,7 @@ from pptx import Presentation
 import streamlit.components.v1 as components
 import time
 import networkx as nx
-import gTTs
+from gtts import gTTS
 
 # --- Page Config & Banner ---
 st.set_page_config(page_title="Vekkam", layout="wide")
