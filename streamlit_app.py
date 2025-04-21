@@ -300,7 +300,7 @@ if uploaded_files:
         cheatsheet = generate_cheatsheet(text)
         highlights = generate_highlights(text)
         critical_concepts = critical_concepts(text)
-
+        audio_path = generate_podcast(text)
         if mind_map:
             st.subheader("🧠 Mind Map (ChatGPT can't do this)")
             plot_mind_map(mind_map["nodes"], mind_map["edges"])
