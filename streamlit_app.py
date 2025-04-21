@@ -321,8 +321,10 @@ if uploaded_files:
             render_section("Highlights", highlights)
         with st.expander("All the critical concepts in a crisp bite for you"):
             render_section("Critical Concepts", critical_concepts)
-        with st.expander("A podcast to guide you through everything, 'cause who reads stuff these days?")
-        
+        with st.expander("🎧 Listen to the Podcast Summary"):
+            with open(audio_path, "rb") as audio_file:
+                st.audio(audio_file.read(), format="audio/mp3")
+                
         # Remove the loader after processing the first file.
         if not first_file_processed:
             loader_placeholder.empty()
