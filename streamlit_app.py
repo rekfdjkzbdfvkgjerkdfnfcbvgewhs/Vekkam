@@ -263,11 +263,11 @@ def generate_cheatsheet(text):
     return call_gemini(f"Create a cheat sheet:\n\n{text}")
 def generate_highlights(text): 
     return call_gemini(f"List key facts and highlights:\n\n{text}")
-def generate_podcast(text):
-    return call_gemini(f"You're NotebookLM. Make a podcast script for a single speaker taking the user through the whole document in detail. This is the doc: \n\n{text}")
 def critical_concepts(text):
         return call_gemini(f"Dumb down the critical concepts in the text so that I am ready for questions in the exam:\n\n{text}")
-def text_to_speech(text, filename="podcast.mp3"):
+def generate_podcast(text):
+    return call_gemini(f"You're NotebookLM. Make a podcast script for a single speaker taking the user through the whole document in detail. This is the doc: \n\n{text}")
+def text_to_speech(text, filename="critical_concepts_podcast.mp3"):
     tts = gTTS(text)
     tts.save(filename)
 
