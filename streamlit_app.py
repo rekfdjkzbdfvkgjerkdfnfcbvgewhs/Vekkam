@@ -128,7 +128,7 @@ def extract_text(file):
 
 # --- Gemini API Call ---
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -295,7 +295,6 @@ if uploaded_files:
         cheatsheet = generate_cheatsheet(text)
         highlights = generate_highlights(text)
         critical_concepts = critical_concepts(text)
-
         if mind_map:
             st.subheader("🧠 Mind Map (ChatGPT can't do this)")
             plot_mind_map(mind_map["nodes"], mind_map["edges"])
@@ -316,7 +315,7 @@ if uploaded_files:
             render_section("Highlights", highlights)
         with st.expander("All the critical concepts in a crisp bite for you"):
             render_section("Critical Concepts", critical_concepts)
-        
+            
         # Remove the loader after processing the first file.
         if not first_file_processed:
             loader_placeholder.empty()
