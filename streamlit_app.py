@@ -263,8 +263,13 @@ def generate_cheatsheet(text):
     return call_gemini(f"Create a cheat sheet:\n\n{text}")
 def generate_highlights(text): 
     return call_gemini(f"List key facts and highlights:\n\n{text}")
+def generate_podcast(text):
+    return call_gemini(f"You're NotebookLM. Make a podcast script for a single speaker taking the user through the whole document in detail. This is the doc: \n\n{text}")
 def critical_concepts(text):
         return call_gemini(f"Dumb down the critical concepts in the text so that I am ready for questions in the exam:\n\n{text}")
+def text_to_speech(text, filename="podcast.mp3"):
+    tts = gTTS(text)
+    tts.save(filename)
 
 # --- Display Helper ---
 def render_section(title, content):
@@ -316,6 +321,7 @@ if uploaded_files:
             render_section("Highlights", highlights)
         with st.expander("All the critical concepts in a crisp bite for you"):
             render_section("Critical Concepts", critical_concepts)
+        with st.expander("A podcast to guide you through everything, 'cause who reads stuff these days?")
         
         # Remove the loader after processing the first file.
         if not first_file_processed:
