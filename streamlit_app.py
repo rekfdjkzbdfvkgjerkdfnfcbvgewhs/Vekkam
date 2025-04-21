@@ -93,7 +93,7 @@ loader_html = """
     // Update interval set to 550ms for a total of ~55 seconds to reach 100%
     const interval = setInterval(() => {
       progress = (progress + 1) % 101;  // Loop progress from 0 to 100 repeatedly
-      progressText.textContent = `Loading... ${progress}%`;
+      progressText.textContent = Loading... ${progress}%;
     }, 550);
     
     // Clear the interval when loader is removed
@@ -128,7 +128,7 @@ def extract_text(file):
 
 # --- Gemini API Call ---
 def call_gemini(prompt, temperature=0.7, max_tokens=8192):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={st.secrets['gemini_api_key']}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -250,7 +250,7 @@ def plot_mind_map(nodes, edges):
 
 # --- AI Learning Aids ---
 def generate_summary(text): 
-    return call_gemini(f"Summarize this for an exam and separately list all the formulae that are mentioned in the text and define the terms therein. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
+    return call_gemini(f"Summarize this for an exam and separately list any formulae that are mentioned in the text. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
 def generate_questions(text): 
     return call_gemini(f"Generate 15 quiz questions for an exam (ignore authors, ISSN, etc.):\n\n{text}")
 def generate_flashcards(text): 
@@ -258,13 +258,11 @@ def generate_flashcards(text):
 def generate_mnemonics(text): 
     return call_gemini(f"Generate mnemonics:\n\n{text}")
 def generate_key_terms(text): 
-    return call_gemini(f"List all key terms in the text, with definitions:\n\n{text}")
+    return call_gemini(f"List 10 key terms with definitions:\n\n{text}")
 def generate_cheatsheet(text): 
     return call_gemini(f"Create a cheat sheet:\n\n{text}")
 def generate_highlights(text): 
     return call_gemini(f"List key facts and highlights:\n\n{text}")
-def critical_concepts(text):
-        return call_gemini(f"Dumb down the critical concepts in the text so that I am ready for questions in the exam:\n\n{text}")
 
 # --- Display Helper ---
 def render_section(title, content):
@@ -294,7 +292,7 @@ if uploaded_files:
         key_terms = generate_key_terms(text)
         cheatsheet = generate_cheatsheet(text)
         highlights = generate_highlights(text)
-        critical_concepts = critical_concepts(text)
+
         if mind_map:
             st.subheader("🧠 Mind Map (ChatGPT can't do this)")
             plot_mind_map(mind_map["nodes"], mind_map["edges"])
@@ -313,9 +311,7 @@ if uploaded_files:
             render_section("Cheat Sheet", cheatsheet)
         with st.expander("⭐ Highlights (everything important in a single place, just for you <3)"):
             render_section("Highlights", highlights)
-        with st.expander("All the critical concepts in a crisp bite for you"):
-            render_section("Critical Concepts", critical_concepts)
-            
+        
         # Remove the loader after processing the first file.
         if not first_file_processed:
             loader_placeholder.empty()
