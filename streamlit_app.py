@@ -263,6 +263,8 @@ def generate_cheatsheet(text):
     return call_gemini(f"Create a cheat sheet:\n\n{text}")
 def generate_highlights(text): 
     return call_gemini(f"List key facts and highlights:\n\n{text}")
+def critical_concepts(text):
+        return call_gemini(f"Dumb down the critical concepts in the text so that I am ready for questions in the exam:\n\n{text}")
 
 # --- Display Helper ---
 def render_section(title, content):
@@ -292,6 +294,7 @@ if uploaded_files:
         key_terms = generate_key_terms(text)
         cheatsheet = generate_cheatsheet(text)
         highlights = generate_highlights(text)
+        critical_concepts = critical_concepts(text)
 
         if mind_map:
             st.subheader("🧠 Mind Map (ChatGPT can't do this)")
@@ -311,6 +314,8 @@ if uploaded_files:
             render_section("Cheat Sheet", cheatsheet)
         with st.expander("⭐ Highlights (everything important in a single place, just for you <3)"):
             render_section("Highlights", highlights)
+        with st.expander("All the critical concepts in a crisp bite for you"):
+            render_section("Critical Concepts", critical_concepts)
         
         # Remove the loader after processing the first file.
         if not first_file_processed:
