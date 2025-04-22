@@ -19,3 +19,4 @@ SpeechRecognition
 deep-translator
 youtube-transcript-api
 reportlab
+streamlit-authenticator
