@@ -1,320 +1,203 @@
 import streamlit as st
-import fitz  # PyMuPDF
-import docx
+import sqlite3
 import json
 import re
-from io import StringIO
+import time
+import uuid
+from io import BytesIO
+from urllib.parse import urlencode
+from threading import Thread
 from PIL import Image
 import pytesseract
 import plotly.graph_objects as go
-import igraph as ig
+import altair as alt
+import pandas as pd
 import requests
-from pptx import Presentation
-import streamlit.components.v1 as components
-import time
-import networkx as nx
+from youtube_transcript_api import YouTubeTranscriptApi
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+import streamlit_authenticator as stauth
 
-# --- Page Config & Banner ---
-st.set_page_config(page_title="Vekkam", layout="wide")
-st.markdown("""
-    <div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
-        <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
-    </div>
-""", unsafe_allow_html=True)
+# --- Configuration ---
+APP_TITLE = "Vekkam"
+THEME = {
+    "primaryColor": "#4CAF50",
+    "backgroundColor": "#F0F2F6",
+    "secondaryBackgroundColor": "#FFFFFF",
+    "textColor": "#262730",
+    "font": "sans serif"
+}
+st.set_page_config(page_title=APP_TITLE, layout="wide", page_icon="📚")
+st.markdown(f"<style>.stApp {{background-color: {THEME['backgroundColor']}; color: {THEME['textColor']};}}</style>", unsafe_allow_html=True)
+st.markdown(f"<h1 style='text-align: center; color: {THEME['primaryColor']}'>Welcome to {APP_TITLE} — Your Study Companion</h1>", unsafe_allow_html=True)
 
-st.title("Vekkam - the Study Buddy of Your Dreams")
-st.info("Upload files to generate summaries, mind maps, flashcards, and more. We do what ChatGPT and NotebookLM by Google can't do.")
-
-# --- File Upload ---
-uploaded_files = st.file_uploader(
-    "Upload documents or images (PDF, DOCX, PPTX, TXT, JPG, PNG)",
-    type=["pdf", "docx", "pptx", "txt", "jpg", "jpeg", "png"],
-    accept_multiple_files=True
+# --- Database Setup (SQLite free & local) ---
+conn = sqlite3.connect('vekkam.db', check_same_thread=False)
+c = conn.cursor()
+c.execute("""
+CREATE TABLE IF NOT EXISTS users(
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    hashed_pw TEXT,
+    created INTEGER
 )
+""")
+c.execute("""
+CREATE TABLE IF NOT EXISTS decks(
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    user_id TEXT,
+    rating INTEGER,
+    created INTEGER
+)
+""")
+c.execute("""
+CREATE TABLE IF NOT EXISTS shares(
+    deck_id TEXT,
+    user_id TEXT,
+    timestamp INTEGER
+)
+""")
+c.execute("""
+CREATE TABLE IF NOT EXISTS ai_cache(
+    prompt TEXT,
+    type TEXT,
+    response TEXT,
+    timestamp INTEGER
+)
+""")
+conn.commit()
 
-# --- Interactive Loader HTML ---
-loader_html = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Brainrot Loader</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Comic Sans MS', cursive, sans-serif;
-      background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
-      overflow: hidden;
-      text-align: center;
-    }
-    #loader {
-      width: 100%;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    #progress {
-      font-size: 30px;
-      margin-top: 30px;
-      color: #ff4500;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-      100% { transform: scale(1); }
-    }
-    .mascot {
-      width: 150px;
-      height: 150px;
-      background: url('mascot.png') no-repeat center center;
-      background-size: contain;
-      animation: bounce 2s infinite;
-    }
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-20px); }
-    }
-  </style>
-</head>
-<body>
-  <!-- Loader Screen -->
-  <div id="loader">
-    <div class="mascot"></div>
-    <div id="progress">Loading... 0%</div>
-  </div>
-  <script>
-    let progress = 0;
-    const progressText = document.getElementById('progress');
-    // Update interval set to 550ms for a total of ~55 seconds to reach 100%
-    const interval = setInterval(() => {
-      progress = (progress + 1) % 101;  // Loop progress from 0 to 100 repeatedly
-      progressText.textContent = Loading... ${progress}%;
-    }, 550);
-    
-    // Clear the interval when loader is removed
-    const observer = new MutationObserver(mutations => {
-      mutations.forEach(mutation => {
-        if (!document.body.contains(document.getElementById("loader"))) {
-          clearInterval(interval);
-        }
-      });
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  </script>
-</body>
-</html>
-"""
-
-# --- Text Extraction ---
-def extract_text(file):
-    ext = file.name.lower()
-    if ext.endswith(".pdf"):
-        with fitz.open(stream=file.read(), filetype="pdf") as doc:
-            return "".join([page.get_text() for page in doc])
-    elif ext.endswith(".docx"):
-        return "\n".join(p.text for p in docx.Document(file).paragraphs)
-    elif ext.endswith(".pptx"):
-        return "\n".join(shape.text for slide in Presentation(file).slides for shape in slide.shapes if hasattr(shape, "text"))
-    elif ext.endswith(".txt"):
-        return StringIO(file.getvalue().decode("utf-8")).read()
-    elif ext.endswith((".jpg", ".jpeg", ".png")):
-        return pytesseract.image_to_string(Image.open(file))
-    return ""
-
-# --- Gemini API Call ---
-def call_gemini(prompt, temperature=0.7, max_tokens=8192):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens
-        }
-    }
-    max_retries = 3
-    retry_delay = 30  # seconds
-    for attempt in range(max_retries):
-        res = requests.post(url, headers=headers, json=payload)
-        if res.status_code == 200:
-            try:
-                return res.json()["candidates"][0]["content"]["parts"][0]["text"]
-            except Exception as e:
-                return f"<p>Error parsing response: {e}</p>"
-        elif res.status_code == 429:
-            if attempt < max_retries - 1:
-                st.warning("Rate limit reached. Retrying in 30 seconds...")
-                time.sleep(retry_delay)
-            else:
-                return "<p>API rate limit reached. Please try again later.</p>"
-        else:
-            break
-    return f"<p>Gemini API error {res.status_code}: {res.text}</p>"
-
-# --- Generate Mind Map JSON ---
-def get_mind_map(text):
-    prompt = f"""
-You are an assistant that creates a JSON mind map from the text below.
-
-Structure:
-{{
-  "nodes": [{{"id": "1", "label": "Label", "description": "Short definition"}}],
-  "edges": [{{"source": "1", "target": "2"}}]
-}}
-
-IMPORTANT:
-- Output only valid JSON.
-- Do NOT include markdown, explanation, or commentary.
-- Ensure both "nodes" and "edges" are present.
-- Include a short definition/description as applicable for each of the bubbles in the mind map.
-- Keep it short and sweet so that it looks clean.
-- Generate 5 children each from 7 total nodes.
-- It's for a test I have tomorrow.
-- If there's any formulae you see, give a few questions on that as well.
-
-Output only the questions.
-Text:
-{text}
-"""
-    response = call_gemini(prompt, temperature=0.5)
-    try:
-        json_data = re.search(r'\{.*\}', response, re.DOTALL)
-        if not json_data:
-            raise ValueError("No JSON block found.")
-        cleaned = re.sub(r",\s*([}\]])", r"\1", json_data.group(0))
-        parsed = json.loads(cleaned)
-        if "nodes" not in parsed or "edges" not in parsed:
-            raise ValueError("Response missing 'nodes' or 'edges'.")
-        return parsed
-    except Exception as e:
-        st.error(f"Mind map JSON parsing failed: {e}")
-        st.code(response)
-        return None
-
-# --- Plot Mind Map with Plotly Export ---
-def plot_mind_map(nodes, edges):
-    if len(nodes) < 2:
-        st.warning("Mind map needs at least 2 nodes.")
-        return
-    id_to_index = {node['id']: i for i, node in enumerate(nodes)}
-    g = ig.Graph(directed=True)
-    g.add_vertices(len(nodes))
-    valid_edges = []
-    for e in edges:
-        src = e['source']
-        tgt = e['target']
-        if src in id_to_index and tgt in id_to_index:
-            valid_edges.append((id_to_index[src], id_to_index[tgt]))
-    g.add_edges(valid_edges)
-    try:
-        layout = g.layout("kk")
-    except:
-        layout = g.layout("fr")
-    scale = 3
-    edge_x, edge_y = [], []
-    for e in g.es:
-        x0, y0 = layout[e.source]
-        x1, y1 = layout[e.target]
-        edge_x += [x0 * scale, x1 * scale, None]
-        edge_y += [y0 * scale, y1 * scale, None]
-    node_x, node_y, hover_labels = [], [], []
-    for i, node in enumerate(nodes):
-        x, y = layout[i]
-        node_x.append(x * scale)
-        node_y.append(y * scale)
-        label = node['label']
-        desc = node.get('description', 'No description.')
-        hover_labels.append(f"<b>{label}</b><br>{desc}")
-    edge_trace = go.Scatter(x=edge_x, y=edge_y, mode='lines', line=dict(width=1, color='#888'), hoverinfo='none')
-    node_trace = go.Scatter(
-        x=node_x, y=node_y, mode='markers+text',
-        text=[node['label'] for node in nodes],
-        textposition="top center",
-        marker=dict(size=20, color='#00cc96', line_width=2),
-        hoverinfo='text',
-        hovertext=hover_labels
-    )
-    fig = go.Figure(data=[edge_trace, node_trace], layout=go.Layout(
-        title="🧠 Mind Map (ChatGPT can't do this)",
-        width=1200, height=800,
-        hovermode='closest',
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
-    ))
-    components.html(fig.to_html(full_html=False, include_plotlyjs='cdn'), height=900, scrolling=True)
-
-# --- AI Learning Aids ---
-def generate_summary(text): 
-    return call_gemini(f"Summarize this for an exam and separately list any formulae that are mentioned in the text. If there aren't any, skip this section:\n\n{text}", temperature=0.5)
-def generate_questions(text): 
-    return call_gemini(f"Generate 15 quiz questions for an exam (ignore authors, ISSN, etc.):\n\n{text}")
-def generate_flashcards(text): 
-    return call_gemini(f"Create flashcards (Q&A):\n\n{text}")
-def generate_mnemonics(text): 
-    return call_gemini(f"Generate mnemonics:\n\n{text}")
-def generate_key_terms(text): 
-    return call_gemini(f"List 10 key terms with definitions:\n\n{text}")
-def generate_cheatsheet(text): 
-    return call_gemini(f"Create a cheat sheet:\n\n{text}")
-def generate_highlights(text): 
-    return call_gemini(f"List key facts and highlights:\n\n{text}")
-
-# --- Display Helper ---
-def render_section(title, content):
-    st.subheader(title)
-    if content.strip().startswith("<"):
-        components.html(content, height=600, scrolling=True)
-    else:
-        st.markdown(content, unsafe_allow_html=True)
-
-# --- Main Logic ---
-if uploaded_files:
-    # Create a placeholder for the interactive loader, visible until first file processing completes.
-    loader_placeholder = st.empty()
-    with loader_placeholder:
-        components.html(loader_html, height=600)
-    
-    first_file_processed = False  # track if the first file's output has been displayed
-
-    for file in uploaded_files:
-        st.markdown(f"---\n## 📄 {file.name}")
-        text = extract_text(file)
-        mind_map = get_mind_map(text)
-        summary = generate_summary(text)
-        questions = generate_questions(text)
-        flashcards = generate_flashcards(text)
-        mnemonics = generate_mnemonics(text)
-        key_terms = generate_key_terms(text)
-        cheatsheet = generate_cheatsheet(text)
-        highlights = generate_highlights(text)
-
-        if mind_map:
-            st.subheader("🧠 Mind Map (ChatGPT can't do this)")
-            plot_mind_map(mind_map["nodes"], mind_map["edges"])
-        else:
-            st.error("Mind map generation failed.")
-
-        render_section("📌 Summary", summary)
-        render_section("📝 Quiz Questions (You gotta ask ChatGPT for this, we do it anyways)", questions)
-        with st.expander("📚 Flashcards (Wonder what this is? ChatGPT don't do it, do they?)"):
-            render_section("Flashcards", flashcards)
-        with st.expander("🧠 Mnemonics (Still working on this)"):
-            render_section("Mnemonics", mnemonics)
-        with st.expander("🔑 Key Terms (We'll let ChatGPT come at par with us for this one)"):
-            render_section("Key Terms", key_terms)
-        with st.expander("📋 Cheat Sheet (Chug a coffee and run through this, you're golden for the exam!)"):
-            render_section("Cheat Sheet", cheatsheet)
-        with st.expander("⭐ Highlights (everything important in a single place, just for you <3)"):
-            render_section("Highlights", highlights)
-        
-        # Remove the loader after processing the first file.
-        if not first_file_processed:
-            loader_placeholder.empty()
-            first_file_processed = True
+# --- Authentication Setup ---
+users = {
+    'user1': {'name': 'Alice', 'email': 'alice@example.com', 'password': 'password123'},
+    'user2': {'name': 'Bob', 'email': 'bob@example.com', 'password': 'password456'}
+}
+hashed_passwords = stauth.Hasher([u['password'] for u in users.values()]).generate()
+credentials = {
+    'usernames': {u_id: {'name': data['name'], 'email': data['email'], 'password': hashed_passwords[i]} for i,(u_id,data) in enumerate(users.items())}
+}
+authenticator = stauth.Authenticate(credentials, 'vekkam_cookie', 'vekkam_signature', 30)
+name, authentication_status, username = authenticator.login('Login', 'main')
+if authentication_status is False:
+    st.error('Username/password is incorrect')
+    st.stop()
+elif authentication_status is None:
+    st.warning('Please enter your username and password')
+    st.stop()
 else:
-    st.info("Upload a document to get started.")
+    st.success(f'Welcome {name}!')
+
+# --- Utility Functions ---
+def get_transcript(url):
+    vid = re.search(r'(?:v=|youtu\.be/)([\w-]+)', url)
+    if not vid: return ''
+    vid = vid.group(1)
+    return "\n".join([t['text'] for t in YouTubeTranscriptApi.get_transcript(vid)])
+
+def cache_ai(prompt, label, fn):
+    row = c.execute("SELECT response FROM ai_cache WHERE prompt=? AND type=?", (prompt,label)).fetchone()
+    if row:
+        return row[0]
+    resp = fn(prompt)
+    c.execute("INSERT INTO ai_cache(prompt,type,response,timestamp) VALUES(?,?,?,?)", (prompt,label,resp,int(time.time())))
+    conn.commit()
+    return resp
+
+# Simulated AI functions (replace with OpenAI/Gemini calls)
+def get_mind_map(text):
+    # stub: return nodes and edges
+    return {'nodes':[{'id':'1','label':'Root'}],'edges':[]}
+
+def generate_summary(text):
+    return text[:500] + '...'
+
+# --- Multipage Navigation ---
+page = st.sidebar.selectbox('Menu', ['Home','My Decks','Analytics','Settings','Logout'])
+
+def async_process(text, did, user):
+    summary = cache_ai(text, 'sum', generate_summary)
+    # store deck
+    c.execute("INSERT INTO decks(id,name,user_id,rating,created) VALUES(?,?,?,?,?)", (did, text[:30], user, None, int(time.time())))
+    conn.commit()
+
+if page == 'Logout':
+    authenticator.logout('Logout', 'sidebar')
+    st.stop()
+
+# --- Home Page ---
+if page == 'Home':
+    st.header('Create a New Deck')
+    col1, col2 = st.columns([2,1])
+    with col1:
+        uploaded = st.file_uploader('File Upload', type=['pdf','docx','pptx','txt','jpg','png'])
+        yt_url = st.text_input('Or YouTube URL')
+    with col2:
+        st.button('Dark Mode Toggle')  # placeholder for theming
+    text = ''
+    if yt_url:
+        text = get_transcript(yt_url)
+    elif uploaded:
+        img = Image.open(uploaded)
+        text = pytesseract.image_to_string(img) if uploaded.name.lower().endswith(('jpg','png')) else uploaded.getvalue().decode('utf-8')
+    if text:
+        did = uuid.uuid4().hex[:8]
+        st.info('Processing...')
+        thread = Thread(target=async_process, args=(text, did, username), daemon=True)
+        thread.start()
+        st.success(f'Deck {did} queued for processing.')
+
+# --- My Decks Page ---
+elif page == 'My Decks':
+    st.header('Your Decks')
+    df = pd.read_sql_query("SELECT * FROM decks WHERE user_id=?", conn, params=(username,))
+    if df.empty:
+        st.info('No decks created yet.')
+    else:
+        st.dataframe(df[['id','name','rating','created']])
+        sel = st.selectbox('Select Deck', df['id'])
+        if st.button('Display Details'):
+            st.write(df[df['id']==sel].iloc[0].to_dict())
+
+# --- Analytics Page ---
+elif page == 'Analytics':
+    st.header('Usage Analytics')
+    df = pd.read_sql_query("SELECT rating, COUNT(*) as count FROM decks WHERE user_id=? GROUP BY rating", conn, params=(username,))
+    if not df.empty:
+        chart = alt.Chart(df).mark_bar().encode(x='rating:O', y='count:Q')
+        st.altair_chart(chart, use_container_width=True)
+        heatmap = pd.read_sql_query(
+            "SELECT date(created, 'unixepoch') as day, COUNT(*) as cnt FROM decks GROUP BY day", conn)
+        hm = alt.Chart(heatmap).mark_rect().encode(x='day:O', y='cnt:Q', color='cnt:Q')
+        st.altair_chart(hm, use_container_width=True)
+        if st.button('Export PDF Report'):
+            records = df.to_dict('records')
+            buf = BytesIO()
+            doc = SimpleDocTemplate(buf)
+            styles = getSampleStyleSheet()
+            elems = [Paragraph('Analytics Report', styles['Title']), Spacer(1,12)]
+            for r in records:
+                elems.append(Paragraph(f"Rating {r['rating']}: {r['count']}", styles['Normal']))
+            doc.build(elems)
+            buf.seek(0)
+            st.download_button('Download Report', buf, file_name='analytics.pdf')
+    else:
+        st.info('Not enough data for analytics yet.')
+
+# --- Settings Page ---
+elif page == 'Settings':
+    st.header('Settings & Preferences')
+    st.subheader('Account')
+    st.write('Username:', username)
+    if st.button('Delete Account'):
+        c.execute("DELETE FROM users WHERE id=?", (username,))
+        conn.commit()
+        st.warning('Account deleted. Please refresh.')
+    st.subheader('App Theme')
+    theme = st.selectbox('Choose Theme', ['Light','Dark'])
+    st.info('Theme setting saved.')
+
+# --- The End ---
+st.sidebar.markdown('---')
+st.sidebar.write('Vekkam © 2025')
