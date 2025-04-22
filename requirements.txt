@@ -17,3 +17,4 @@ scikit-learn
 pandas
 SpeechRecognition
 deep-translator
+youtube-transcript-api
