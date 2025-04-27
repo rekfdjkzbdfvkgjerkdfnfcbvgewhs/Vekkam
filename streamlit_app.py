@@ -17,8 +17,6 @@ import threading
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-from google_auth_oauthlib.flow import Flow
-from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.oauth2 import id_token
@@ -62,20 +60,44 @@ if USER_KEY not in st.session_state:
 
 # Perform OAuth flow for login and calendar
 def do_google_login():
-    # Rebuild client_config
+    # Rebuild client_config from your Web OAuth secrets
     client_config = {
-      "web": {
-        "client_id":     st.secrets["oauth"]["web"]["client_id"],
-        "client_secret": st.secrets["oauth"]["web"]["client_secret"],
-        "auth_uri":      st.secrets["oauth"]["web"]["auth_uri"],
-        "token_uri":     st.secrets["oauth"]["web"]["token_uri"],
-        "auth_provider_x509_cert_url": st.secrets["oauth"]["web"]["auth_provider_x509_cert_url"],
-        "redirect_uris": [st.secrets["oauth"]["web"]["redirect_uri"]]
-      }
+        "web": {
+            "client_id": st.secrets["oauth"]["web"]["client_id"],
+            "client_secret": st.secrets["oauth"]["web"]["client_secret"],
+            "auth_uri": st.secrets["oauth"]["web"]["auth_uri"],
+            "token_uri": st.secrets["oauth"]["web"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["oauth"]["web"]["auth_provider_x509_cert_url"],
+            # Note: we read the first element of the redirect_uris list here
+            "redirect_uris": st.secrets["oauth"]["web"]["redirect_uris"]
+        }
     }
-    flow = Flow.from_client_config(client_config, scopes=SCOPES, redirect_uri=st.secrets["oauth"]["web"]["redirect_uri"])
+
+    # Use InstalledAppFlow so run_local_server() is available
+    flow = InstalledAppFlow.from_client_config(
+        client_config,
+        scopes=SCOPES,
+        redirect_uri=st.secrets["oauth"]["web"]["redirect_uris"][0]
+    )
+
+    # This will spin up a localhost listener and open a browser for you to log in
     creds = flow.run_local_server(port=8501, open_browser=True)
-            
+
+    # Store tokens in session
+    st.session_state[TOKEN_KEY] = creds_to_dict(creds)
+
+    # Verify the ID token and capture user info
+    idinfo = id_token.verify_oauth2_token(
+        creds.id_token,
+        google_requests.Request(),
+        st.secrets["google_client_id"]
+    )
+    st.session_state[USER_KEY] = {
+        "email":   idinfo["email"],
+        "name":    idinfo["name"],
+        "picture": idinfo.get("picture")
+    }
+    
 # Convert credentials to dict and back
 def creds_to_dict(creds):
     return {
