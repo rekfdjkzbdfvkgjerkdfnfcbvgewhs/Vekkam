@@ -63,7 +63,7 @@ if USER_KEY not in st.session_state:
 
 # Perform OAuth flow for login and calendar
 def do_google_login():
-    # Rebuild the client_config that Google expects
+    # Rebuild the client_config JSON from your flattened secrets
     client_config = {
         "installed": {
             "client_id": st.secrets["oauth"]["installed_client_id"],
@@ -71,26 +71,28 @@ def do_google_login():
             "auth_uri": st.secrets["oauth"]["auth_uri"],
             "token_uri": st.secrets["oauth"]["token_uri"],
             "auth_provider_x509_cert_url": st.secrets["oauth"]["auth_provider_x509_cert_url"],
-            # redirect_uris isn’t needed for console flow
+            # InstalledAppFlow knows its own loopback URIs—no need to specify redirect_uris
         }
     }
 
-    # This will open the browser, prompt consent, then ask you to paste the code back
     flow = InstalledAppFlow.from_client_config(client_config, scopes=SCOPES)
-    creds = flow.run_console()  
-    # run_console() handles the code exchange using your Desktop client
+    # This spins up a temporary localhost server and opens the browser for you:
+    creds = flow.run_local_server(port=0)
 
-    # Save creds & user info into session
+    # Store credentials
     st.session_state[TOKEN_KEY] = creds_to_dict(creds)
+
+    # Verify ID token and capture user info
     idinfo = id_token.verify_oauth2_token(
-        creds.id_token, google_requests.Request(), st.secrets["google_client_id"]
+        creds.id_token,
+        google_requests.Request(),
+        st.secrets["google_client_id"]
     )
     st.session_state[USER_KEY] = {
-        "email": idinfo["email"],
-        "name":  idinfo["name"],
+        "email":   idinfo.get("email"),
+        "name":    idinfo.get("name"),
         "picture": idinfo.get("picture")
     }
-
 # Convert credentials to dict and back
 def creds_to_dict(creds):
     return {
