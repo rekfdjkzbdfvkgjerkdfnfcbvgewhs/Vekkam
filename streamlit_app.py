@@ -41,7 +41,9 @@ SCOPES = [
     'https://www.googleapis.com/auth/userinfo.profile',
     'https://www.googleapis.com/auth/calendar.events'
 ]
-CLIENT_SECRETS_FILE = 'client_secrets.json'
+
+# CLIENT_CONFIG should be defined in Streamlit secrets as a dict matching OAuth2 client_secrets.json
+CLIENT_CONFIG = st.secrets["oauth"]  # e.g. {"web": {...}}
 TOKEN_KEY = 'google_credentials'
 USER_KEY = 'google_user'
 
@@ -60,8 +62,8 @@ if USER_KEY not in st.session_state:
 
 # Perform OAuth flow for login and calendar
 def do_google_login():
-    flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE,
+    flow = Flow.from_client_config(
+        CLIENT_CONFIG,
         scopes=SCOPES,
         redirect_uri='urn:ietf:wg:oauth:2.0:oob'
     )
@@ -72,6 +74,7 @@ def do_google_login():
         flow.fetch_token(code=code)
         creds = flow.credentials
         st.session_state[TOKEN_KEY] = creds_to_dict(creds)
+        # Verify ID token and store user info
         idinfo = id_token.verify_oauth2_token(
             creds.id_token,
             google_requests.Request(),
