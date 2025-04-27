@@ -62,10 +62,21 @@ if USER_KEY not in st.session_state:
 
 # Perform OAuth flow for login and calendar
 def do_google_login():
+    # Build proper Google OAuth client_config dynamically
+    client_config = {
+        "installed": {
+            "client_id": st.secrets["oauth"]["installed_client_id"],
+            "client_secret": st.secrets["oauth"]["installed_client_secret"],
+            "auth_uri": st.secrets["oauth"]["auth_uri"],
+            "token_uri": st.secrets["oauth"]["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["oauth"]["auth_provider_x509_cert_url"],
+            "redirect_uris": [st.secrets["oauth"]["redirect_uri"]],
+        }
+    }
     flow = Flow.from_client_config(
-        CLIENT_CONFIG,
+        client_config,
         scopes=SCOPES,
-        redirect_uri='urn:ietf:wg:oauth:2.0:oob'
+        redirect_uri=st.secrets["oauth"]["redirect_uri"]
     )
     auth_url, _ = flow.authorization_url(prompt='consent')
     st.write(f"[Login with Google]({auth_url}) to continue.")
@@ -74,11 +85,10 @@ def do_google_login():
         flow.fetch_token(code=code)
         creds = flow.credentials
         st.session_state[TOKEN_KEY] = creds_to_dict(creds)
-        # Verify ID token and store user info
         idinfo = id_token.verify_oauth2_token(
             creds.id_token,
             google_requests.Request(),
-            st.secrets['google-client_id']
+            st.secrets["google_client_id"]
         )
         st.session_state[USER_KEY] = {
             'email': idinfo.get('email'),
