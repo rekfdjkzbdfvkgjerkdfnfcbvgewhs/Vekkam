@@ -21,4 +21,3 @@ youtube-transcript-api
 reportlab
 streamlit-authenticator
 google-auth-oauthlib
-redis-py
