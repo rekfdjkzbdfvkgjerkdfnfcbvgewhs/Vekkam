@@ -19,6 +19,8 @@ import threading
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 # Caching imports
 import redis
@@ -32,9 +34,16 @@ REDIS_URL = st.secrets.get('redis_url', 'redis://localhost:6379')
 cache = redis.from_url(REDIS_URL)
 CACHE_TTL = 3600  # seconds
 
-SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+# OAuth & Google API scopes
+SCOPES = [
+    'openid',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+    'https://www.googleapis.com/auth/calendar.events'
+]
 CLIENT_SECRETS_FILE = 'client_secrets.json'
-TOKEN_KEY = 'google_calendar_token'
+TOKEN_KEY = 'google_credentials'
+USER_KEY = 'google_user'
 
 # --- Helper Functions ---
 
@@ -45,41 +54,83 @@ def cache_get(key):
 def cache_set(key, value):
     cache.setex(key, CACHE_TTL, json.dumps(value))
 
-# OAuth: stores credentials in session_state
-if 'credentials' not in st.session_state:
-    st.session_state['credentials'] = None
+# --- OAuth / Google Login ---
+if USER_KEY not in st.session_state:
+    st.session_state[USER_KEY] = None
 
-# Initialize Google Calendar service
-def get_calendar_service():
-    creds = st.session_state['credentials']
-    if not creds:
-        flow = Flow.from_client_secrets_file(
-            CLIENT_SECRETS_FILE,
-            scopes=SCOPES,
-            redirect_uri='urn:ietf:wg:oauth:2.0:oob'
+# Perform OAuth flow for login and calendar
+def do_google_login():
+    flow = Flow.from_client_secrets_file(
+        CLIENT_SECRETS_FILE,
+        scopes=SCOPES,
+        redirect_uri='urn:ietf:wg:oauth:2.0:oob'
+    )
+    auth_url, _ = flow.authorization_url(prompt='consent')
+    st.write(f"[Login with Google]({auth_url}) to continue.")
+    code = st.text_input('Enter Google authorization code:', key='oauth_code')
+    if code:
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        st.session_state[TOKEN_KEY] = creds_to_dict(creds)
+        idinfo = id_token.verify_oauth2_token(
+            creds.id_token,
+            google_requests.Request(),
+            st.secrets['google_client_id']
         )
-        auth_url, _ = flow.authorization_url(prompt='consent')
-        st.markdown(f"[Authorize with Google Calendar]({auth_url})")
-        code = st.text_input('Enter the authorization code:')
-        if code:
-            flow.fetch_token(code=code)
-            creds = flow.credentials
-            st.session_state['credentials'] = creds
-    service = build('calendar', 'v3', credentials=st.session_state['credentials'])
-    return service
+        st.session_state[USER_KEY] = {
+            'email': idinfo.get('email'),
+            'name': idinfo.get('name'),
+            'picture': idinfo.get('picture')
+        }
+
+# Convert credentials to dict and back
+def creds_to_dict(creds):
+    return {
+        'token': creds.token,
+        'refresh_token': creds.refresh_token,
+        'token_uri': creds.token_uri,
+        'client_id': creds.client_id,
+        'client_secret': creds.client_secret,
+        'scopes': creds.scopes
+    }
+
+def get_credentials():
+    data = st.session_state.get(TOKEN_KEY)
+    if not data:
+        return None
+    return Credentials(
+        token=data['token'],
+        refresh_token=data.get('refresh_token'),
+        token_uri=data['token_uri'],
+        client_id=data['client_id'],
+        client_secret=data['client_secret'],
+        scopes=data['scopes']
+    )
+
+# Google Calendar service
+def get_calendar_service():
+    creds = get_credentials()
+    if not creds:
+        do_google_login()
+        return None
+    return build('calendar', 'v3', credentials=creds)
 
 # Schedule events in calendar
 def schedule_study_sessions(plan):
     service = get_calendar_service()
-    for session in plan['sessions']:
+    if not service:
+        st.warning("Please log in first.")
+        return
+    for session in plan.get('sessions', []):
         event = {
             'summary': session['topic'],
             'start': {'dateTime': session['start'], 'timeZone': 'Asia/Kolkata'},
             'end': {'dateTime': session['end'], 'timeZone': 'Asia/Kolkata'},
         }
         service.events().insert(calendarId='primary', body=event).execute()
+    st.success("Study sessions added to your Google Calendar!")
 
-# Progress bar wrapper for long tasks
+# Background threading & progress bar
 def run_with_progress(func, *args, **kwargs):
     progress = st.progress(0)
     result = [None]
@@ -106,100 +157,23 @@ body { font-family: 'Segoe UI', sans-serif; }
 """, height=0)
 
 # --- App Layout ---
-st.markdown("""
-<div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
-  <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
-</div>
-""", unsafe_allow_html=True)
+if not st.session_state[USER_KEY]:
+    st.title("Welcome to Vekkam")
+    st.write("Authenticate to personalize your experience.")
+    do_google_login()
+    st.stop()
+
+# User is logged in
+user = st.session_state[USER_KEY]
+st.sidebar.image(user.get('picture'), width=60)
+st.sidebar.write(f"Logged in as {user.get('name')} \n({user.get('email')})")
+st.sidebar.button("Logout", on_click=lambda: st.session_state.clear())
+
 st.title("Vekkam - Study Smarter, Not Harder")
-st.info("Authenticate with Google to sync study sessions to your Calendar and enjoy cached AI-generated content for speed and cost efficiency.")
+st.info("Sync study sessions to your Google Calendar and enjoy cached AI-generated content for speed and cost efficiency.")
 
 # --- Inputs ---
 # Guide Book & Syllabus
 st.header("📚 Guide-Book & Syllabus Setup")
 book_input = st.text_input("Enter Guide-Book Title or ISBN for lookup:")
 syllabus_input = st.text_area("Paste or enter your exam syllabus (one topic per line):")
-
-# Cached book lookup
-def fetch_book_data(query):
-    key = hashlib.sha256(query.encode()).hexdigest()
-    cached = cache_get(key)
-    if cached:
-        return cached
-    res = requests.get('https://www.googleapis.com/books/v1/volumes', params={'q': query, 'maxResults':1})
-    data = res.json().get('items', [None])[0]
-    cache_set(key, data)
-    return data
-
-book_data = fetch_book_data(book_input) if book_input else None
-if book_data:
-    info = book_data['volumeInfo']
-    st.subheader(info.get('title', 'Title not available'))
-    st.write(f"**Authors:** {', '.join(info.get('authors', []))}")
-    if info.get('description'):
-        st.write(info['description'])
-
-# Parse syllabus
-syllabus_json = None
-if syllabus_input:
-    topics = [line.strip() for line in syllabus_input.splitlines() if line.strip()]
-    syllabus_json = {'topics': topics}
-    st.write("**Structured Syllabus:**")
-    st.json(syllabus_json)
-
-# --- Core AI Calls with caching ---
-
-def call_cached_gemini(prompt):
-    key = hashlib.sha256(prompt.encode()).hexdigest()
-    cached = cache_get(key)
-    if cached:
-        return cached
-    response = call_gemini(prompt)
-    cache_set(key, response)
-    return response
-
-# Study Plan Generation
-if book_data and syllabus_json:
-    if st.button("Generate 6-Hour Study Plan"):
-        plan = run_with_progress(lambda: json.loads(call_cached_gemini(
-            f"Generate a 6-hour study plan from Book: {json.dumps(book_data['volumeInfo'])} and Syllabus: {json.dumps(syllabus_json)}"
-        )))
-        st.subheader("🗓️ Your 6-Hour Study Plan")
-        st.json(plan)
-        if st.button("Sync to Google Calendar"):
-            schedule_study_sessions(plan)
-            st.success("Study sessions added to your Google Calendar!")
-
-# File Upload for supplemental materials
-st.header("📄 Upload Study Materials")
-uploaded_files = st.file_uploader(
-    "Upload documents or images (PDF, DOCX, PPTX, TXT, JPG, PNG)",
-    type=["pdf","docx","pptx","txt","jpg","jpeg","png"], accept_multiple_files=True
-)
-
-# Processing uploads
-if uploaded_files:
-    loader = st.empty()
-    loader.components.html(loader_html, height=400)
-    for file in uploaded_files:
-        text = extract_text(file)
-        # Mind map
-        mind_map = run_with_progress(lambda: get_mind_map(text))
-        if mind_map:
-            plot_mind_map(mind_map['nodes'], mind_map['edges'])
-        # Other aids
-        for title, fn in [
-            ("📌 Summary", lambda t=text: generate_summary(t)),
-            ("📝 Quiz Questions", lambda t=text: generate_questions(t)),
-            ("🃏 Flashcards", lambda t=text: generate_flashcards(t)),
-            ("🔤 Mnemonics", lambda t=text: generate_mnemonics(t)),
-            ("🔑 Key Terms", lambda t=text: generate_key_terms(t)),
-            ("📋 Cheat Sheet", lambda t=text: generate_cheatsheet(t)),
-            ("⭐ Highlights", lambda t=text: generate_highlights(t))
-        ]:
-            with st.expander(title):
-                content = run_with_progress(fn)
-                render_section(title, content)
-    loader.empty()
-else:
-    st.info("Input your guide-book & syllabus or upload materials to begin.")
