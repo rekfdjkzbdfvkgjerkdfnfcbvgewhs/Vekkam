@@ -22,3 +22,4 @@ reportlab
 streamlit-authenticator
 google-auth-oauthlib
 google-api-python-client
+redis
