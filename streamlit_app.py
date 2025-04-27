@@ -14,6 +14,7 @@ import streamlit.components.v1 as components
 import time
 import networkx as nx
 import threading
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Calendar & OAuth imports
 from google_auth_oauthlib.flow import Flow
@@ -62,7 +63,7 @@ if USER_KEY not in st.session_state:
 
 # Perform OAuth flow for login and calendar
 def do_google_login():
-    # Build proper Google OAuth client_config dynamically
+    # Rebuild the client_config that Google expects
     client_config = {
         "installed": {
             "client_id": st.secrets["oauth"]["installed_client_id"],
@@ -70,31 +71,25 @@ def do_google_login():
             "auth_uri": st.secrets["oauth"]["auth_uri"],
             "token_uri": st.secrets["oauth"]["token_uri"],
             "auth_provider_x509_cert_url": st.secrets["oauth"]["auth_provider_x509_cert_url"],
-            "redirect_uris": [st.secrets["oauth"]["redirect_uri"]],
+            # redirect_uris isn’t needed for console flow
         }
     }
-    flow = Flow.from_client_config(
-        client_config,
-        scopes=SCOPES,
-        redirect_uri=st.secrets["oauth"]["redirect_uri"]
+
+    # This will open the browser, prompt consent, then ask you to paste the code back
+    flow = InstalledAppFlow.from_client_config(client_config, scopes=SCOPES)
+    creds = flow.run_console()  
+    # run_console() handles the code exchange using your Desktop client
+
+    # Save creds & user info into session
+    st.session_state[TOKEN_KEY] = creds_to_dict(creds)
+    idinfo = id_token.verify_oauth2_token(
+        creds.id_token, google_requests.Request(), st.secrets["google_client_id"]
     )
-    auth_url, _ = flow.authorization_url(prompt='consent')
-    st.write(f"[Login with Google]({auth_url}) to continue.")
-    code = st.text_input('Enter Google authorization code:', key='oauth_code')
-    if code:
-        flow.fetch_token(code=code)
-        creds = flow.credentials
-        st.session_state[TOKEN_KEY] = creds_to_dict(creds)
-        idinfo = id_token.verify_oauth2_token(
-            creds.id_token,
-            google_requests.Request(),
-            st.secrets["google_client_id"]
-        )
-        st.session_state[USER_KEY] = {
-            'email': idinfo.get('email'),
-            'name': idinfo.get('name'),
-            'picture': idinfo.get('picture')
-        }
+    st.session_state[USER_KEY] = {
+        "email": idinfo["email"],
+        "name":  idinfo["name"],
+        "picture": idinfo.get("picture")
+    }
 
 # Convert credentials to dict and back
 def creds_to_dict(creds):
