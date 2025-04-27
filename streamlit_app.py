@@ -78,7 +78,7 @@ def do_google_login():
         idinfo = id_token.verify_oauth2_token(
             creds.id_token,
             google_requests.Request(),
-            st.secrets['google_client_id']
+            st.secrets['google-client_id']
         )
         st.session_state[USER_KEY] = {
             'email': idinfo.get('email'),
