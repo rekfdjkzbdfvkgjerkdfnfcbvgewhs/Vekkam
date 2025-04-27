@@ -65,15 +65,15 @@ def do_google_login():
     # Rebuild client_config
     client_config = {
       "web": {
-        "client_id":     st.secrets["oauth.web"]["client_id"],
-        "client_secret": st.secrets["oauth.web"]["client_secret"],
-        "auth_uri":      st.secrets["oauth.web"]["auth_uri"],
-        "token_uri":     st.secrets["oauth.web"]["token_uri"],
-        "auth_provider_x509_cert_url": st.secrets["oauth.web"]["auth_provider_x509_cert_url"],
-        "redirect_uris": [st.secrets["oauth.web"]["redirect_uri"]]
+        "client_id":     st.secrets["oauth"]["web"]["client_id"],
+        "client_secret": st.secrets["oauth"]["web"]["client_secret"],
+        "auth_uri":      st.secrets["oauth"]["web"]["auth_uri"],
+        "token_uri":     st.secrets["oauth"]["web"]["token_uri"],
+        "auth_provider_x509_cert_url": st.secrets["oauth"]["web"]["auth_provider_x509_cert_url"],
+        "redirect_uris": [st.secrets["oauth"]["web"]["redirect_uri"]]
       }
     }
-    flow = Flow.from_client_config(client_config, scopes=SCOPES, redirect_uri=st.secrets["oauth.web"]["redirect_uri"])
+    flow = Flow.from_client_config(client_config, scopes=SCOPES, redirect_uri=st.secrets["oauth"]["web"]["redirect_uri"])
     creds = flow.run_local_server(port=8501, open_browser=True)
             
 # Convert credentials to dict and back
