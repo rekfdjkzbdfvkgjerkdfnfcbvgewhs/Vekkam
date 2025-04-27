@@ -13,127 +13,193 @@ from pptx import Presentation
 import streamlit.components.v1 as components
 import time
 import networkx as nx
+import threading
 
-# --- Page Config & Banner ---
+# Calendar & OAuth imports
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+
+# Caching imports
+import redis
+import hashlib
+
+# --- Configuration & Secrets ---
 st.set_page_config(page_title="Vekkam", layout="wide")
+
+# Initialize Redis cache (replace with your Redis URL)
+REDIS_URL = st.secrets.get('redis_url', 'redis://localhost:6379')
+cache = redis.from_url(REDIS_URL)
+CACHE_TTL = 3600  # seconds
+
+SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+CLIENT_SECRETS_FILE = 'client_secrets.json'
+TOKEN_KEY = 'google_calendar_token'
+
+# --- Helper Functions ---
+
+def cache_get(key):
+    val = cache.get(key)
+    return json.loads(val) if val else None
+
+def cache_set(key, value):
+    cache.setex(key, CACHE_TTL, json.dumps(value))
+
+# OAuth: stores credentials in session_state
+if 'credentials' not in st.session_state:
+    st.session_state['credentials'] = None
+
+# Initialize Google Calendar service
+def get_calendar_service():
+    creds = st.session_state['credentials']
+    if not creds:
+        flow = Flow.from_client_secrets_file(
+            CLIENT_SECRETS_FILE,
+            scopes=SCOPES,
+            redirect_uri='urn:ietf:wg:oauth:2.0:oob'
+        )
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        st.markdown(f"[Authorize with Google Calendar]({auth_url})")
+        code = st.text_input('Enter the authorization code:')
+        if code:
+            flow.fetch_token(code=code)
+            creds = flow.credentials
+            st.session_state['credentials'] = creds
+    service = build('calendar', 'v3', credentials=st.session_state['credentials'])
+    return service
+
+# Schedule events in calendar
+def schedule_study_sessions(plan):
+    service = get_calendar_service()
+    for session in plan['sessions']:
+        event = {
+            'summary': session['topic'],
+            'start': {'dateTime': session['start'], 'timeZone': 'Asia/Kolkata'},
+            'end': {'dateTime': session['end'], 'timeZone': 'Asia/Kolkata'},
+        }
+        service.events().insert(calendarId='primary', body=event).execute()
+
+# Progress bar wrapper for long tasks
+def run_with_progress(func, *args, **kwargs):
+    progress = st.progress(0)
+    result = [None]
+    def target():
+        result[0] = func(*args, **kwargs)
+    thread = threading.Thread(target=target)
+    thread.start()
+    while thread.is_alive():
+        time.sleep(0.5)
+        progress.progress(min(progress._value + 5, 100))
+    progress.empty()
+    return result[0]
+
+# --- UI Styles ---
+components.html("""
+<style>
+body { font-family: 'Segoe UI', sans-serif; }
+.stButton button { border-radius: 12px; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
+.stTextInput>div>div>input { padding: 8px; border-radius: 6px; }
+@media (max-width: 600px) {
+  .main .block-container { padding: 1rem; }
+}
+</style>
+""", height=0)
+
+# --- App Layout ---
 st.markdown("""
-    <div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
-        <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
-    </div>
+<div style='background-color: #4CAF50; padding: 10px; text-align: center;'>
+  <h1 style='color: white;'>Welcome to Vekkam - Your Study Buddy</h1>
+</div>
 """, unsafe_allow_html=True)
+st.title("Vekkam - Study Smarter, Not Harder")
+st.info("Authenticate with Google to sync study sessions to your Calendar and enjoy cached AI-generated content for speed and cost efficiency.")
 
-st.title("Vekkam - the Study Buddy of Your Dreams")
-st.info("Upload files or fetch your guide-book + syllabus to generate personalized study plans, summaries, mind maps, flashcards, and more.")
-
-# --- Book & Syllabus Inputs ---
+# --- Inputs ---
+# Guide Book & Syllabus
 st.header("📚 Guide-Book & Syllabus Setup")
 book_input = st.text_input("Enter Guide-Book Title or ISBN for lookup:")
-book_data = None
-if book_input:
-    # Fetch metadata from Google Books API
-    params = {'q': book_input, 'maxResults': 1, 'printType': 'books'}
-    res = requests.get("https://www.googleapis.com/books/v1/volumes", params=params)
-    if res.status_code == 200 and 'items' in res.json():
-        book_data = res.json()['items'][0]
-        info = book_data['volumeInfo']
-        st.subheader(info.get('title', 'Unknown Title'))
-        st.write(f"**Authors:** {', '.join(info.get('authors', []))}")
-        st.write(f"**Published Date:** {info.get('publishedDate', 'N/A')}")
-        toc = info.get('tableOfContents', []) if 'tableOfContents' in info else None
-        if not toc and 'description' in info:
-            st.write(info['description'])
-        else:
-            st.write("**Table of Contents:**")
-            for idx, chapter in enumerate(toc or [], 1):
-                st.write(f"{idx}. {chapter}")
-    else:
-        st.error("Book not found or API error.")
-
 syllabus_input = st.text_area("Paste or enter your exam syllabus (one topic per line):")
+
+# Cached book lookup
+def fetch_book_data(query):
+    key = hashlib.sha256(query.encode()).hexdigest()
+    cached = cache_get(key)
+    if cached:
+        return cached
+    res = requests.get('https://www.googleapis.com/books/v1/volumes', params={'q': query, 'maxResults':1})
+    data = res.json().get('items', [None])[0]
+    cache_set(key, data)
+    return data
+
+book_data = fetch_book_data(book_input) if book_input else None
+if book_data:
+    info = book_data['volumeInfo']
+    st.subheader(info.get('title', 'Title not available'))
+    st.write(f"**Authors:** {', '.join(info.get('authors', []))}")
+    if info.get('description'):
+        st.write(info['description'])
+
+# Parse syllabus
 syllabus_json = None
 if syllabus_input:
-    # Simple parser: split lines into JSON structure
     topics = [line.strip() for line in syllabus_input.splitlines() if line.strip()]
     syllabus_json = {'topics': topics}
     st.write("**Structured Syllabus:**")
     st.json(syllabus_json)
 
-# --- File Upload ---
-st.header("📄 Upload Study Materials (PDF, DOCX, PPTX, TXT, JPG, PNG)")
+# --- Core AI Calls with caching ---
+
+def call_cached_gemini(prompt):
+    key = hashlib.sha256(prompt.encode()).hexdigest()
+    cached = cache_get(key)
+    if cached:
+        return cached
+    response = call_gemini(prompt)
+    cache_set(key, response)
+    return response
+
+# Study Plan Generation
+if book_data and syllabus_json:
+    if st.button("Generate 6-Hour Study Plan"):
+        plan = run_with_progress(lambda: json.loads(call_cached_gemini(
+            f"Generate a 6-hour study plan from Book: {json.dumps(book_data['volumeInfo'])} and Syllabus: {json.dumps(syllabus_json)}"
+        )))
+        st.subheader("🗓️ Your 6-Hour Study Plan")
+        st.json(plan)
+        if st.button("Sync to Google Calendar"):
+            schedule_study_sessions(plan)
+            st.success("Study sessions added to your Google Calendar!")
+
+# File Upload for supplemental materials
+st.header("📄 Upload Study Materials")
 uploaded_files = st.file_uploader(
-    "Upload documents or images to supplement your guide-book.",
-    type=["pdf", "docx", "pptx", "txt", "jpg", "jpeg", "png"],
-    accept_multiple_files=True
+    "Upload documents or images (PDF, DOCX, PPTX, TXT, JPG, PNG)",
+    type=["pdf","docx","pptx","txt","jpg","jpeg","png"], accept_multiple_files=True
 )
 
-# --- Interactive Loader HTML ---
-loader_html = """<!DOCTYPE html><html lang=\"en\">... (loader HTML unchanged) ...</html>"""
-
-# --- Text Extraction Function ---
-def extract_text(file):
-    ext = file.name.lower()
-    if ext.endswith(".pdf"):
-        with fitz.open(stream=file.read(), filetype="pdf") as doc:
-            return "".join([page.get_text() for page in doc])
-    elif ext.endswith(".docx"):
-        return "\n".join(p.text for p in docx.Document(file).paragraphs)
-    elif ext.endswith(".pptx"):
-        return "\n".join(shape.text for slide in Presentation(file).slides for shape in slide.shapes if hasattr(shape, "text"))
-    elif ext.endswith(".txt"):
-        return StringIO(file.getvalue().decode("utf-8")).read()
-    elif ext.endswith((".jpg", ".jpeg", ".png")):
-        return pytesseract.image_to_string(Image.open(file))
-    return ""
-
-# --- Gemini API Call ---
-def call_gemini(prompt, temperature=0.7, max_tokens=8192):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={st.secrets['gemini_api_key']}"
-    headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": prompt}]}],
-               "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens}}
-    for attempt in range(3):
-        res = requests.post(url, headers=headers, json=payload)
-        if res.status_code == 200:
-            return res.json()["candidates"][0]["content"]["parts"][0]["text"]
-        elif res.status_code == 429:
-            time.sleep(30)
-        else:
-            break
-    return f"<p>API error {res.status_code}</p>"
-
-# --- Core Study-Plan Generation ---
-def generate_study_plan(book_info, syllabus):
-    prompt = f"""
-You are an AI study assistant.
-Given the guide-book metadata and structured syllabus, create a 6-hour study plan.
-
-Book Info: {json.dumps(book_info, indent=2)}
-Syllabus: {json.dumps(syllabus, indent=2)}
-
-Produce a detailed timeline with sessions, topics, and resources.
-"""
-    return call_gemini(prompt, temperature=0.5)
-
-# --- Display Helper ---
-def render_section(title, content):
-    st.subheader(title)
-    st.markdown(content, unsafe_allow_html=True)
-
-# --- Main Logic ---
-if book_data and syllabus_json:
-    st.header("🗓️ Generated 6-Hour Study Plan")
-    plan = generate_study_plan(book_data, syllabus_json)
-    render_section("Study Plan", plan)
-
+# Processing uploads
 if uploaded_files:
     loader = st.empty()
-    loader.components.html(loader_html, height=600)
+    loader.components.html(loader_html, height=400)
     for file in uploaded_files:
-        st.markdown(f"---\n## 📄 {file.name}")
         text = extract_text(file)
-        # Generate learning aids as before...
-        # ... mind map, summary, flashcards, mnemonics using call_gemini()
-        # For brevity, reuse existing functions and render_section
+        # Mind map
+        mind_map = run_with_progress(lambda: get_mind_map(text))
+        if mind_map:
+            plot_mind_map(mind_map['nodes'], mind_map['edges'])
+        # Other aids
+        for title, fn in [
+            ("📌 Summary", lambda t=text: generate_summary(t)),
+            ("📝 Quiz Questions", lambda t=text: generate_questions(t)),
+            ("🃏 Flashcards", lambda t=text: generate_flashcards(t)),
+            ("🔤 Mnemonics", lambda t=text: generate_mnemonics(t)),
+            ("🔑 Key Terms", lambda t=text: generate_key_terms(t)),
+            ("📋 Cheat Sheet", lambda t=text: generate_cheatsheet(t)),
+            ("⭐ Highlights", lambda t=text: generate_highlights(t))
+        ]:
+            with st.expander(title):
+                content = run_with_progress(fn)
+                render_section(title, content)
     loader.empty()
 else:
-    st.info("Upload materials or input your guide-book and syllabus to begin.")
+    st.info("Input your guide-book & syllabus or upload materials to begin.")
