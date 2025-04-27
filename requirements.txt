@@ -21,4 +21,4 @@ youtube-transcript-api
 reportlab
 streamlit-authenticator
 google-auth-oauthlib
-googleapiclient
+google-api-python-client
