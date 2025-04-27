@@ -81,7 +81,7 @@ def do_google_login():
     )
 
     # This will spin up a localhost listener and open a browser for you to log in
-    creds = flow.run_local_server(port=0, open_browser=True)
+    creds = flow.run_local_server(port=0, open_browser=False)
 
     # Store tokens in session
     st.session_state[TOKEN_KEY] = creds_to_dict(creds)
