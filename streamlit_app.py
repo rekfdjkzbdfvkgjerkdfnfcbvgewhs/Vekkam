@@ -15,6 +15,8 @@ import time
 import networkx as nx
 import threading
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 # Calendar & OAuth imports
 from google_auth_oauthlib.flow import Flow
@@ -63,36 +65,57 @@ if USER_KEY not in st.session_state:
 
 # Perform OAuth flow for login and calendar
 def do_google_login():
-    # Rebuild the client_config JSON from your flattened secrets
+    # 1. Rebuild the installed-client config from flattened secrets
     client_config = {
         "installed": {
-            "client_id": st.secrets["oauth"]["installed_client_id"],
+            "client_id":     st.secrets["oauth"]["installed_client_id"],
             "client_secret": st.secrets["oauth"]["installed_client_secret"],
-            "auth_uri": st.secrets["oauth"]["auth_uri"],
-            "token_uri": st.secrets["oauth"]["token_uri"],
+            "auth_uri":      st.secrets["oauth"]["auth_uri"],
+            "token_uri":     st.secrets["oauth"]["token_uri"],
             "auth_provider_x509_cert_url": st.secrets["oauth"]["auth_provider_x509_cert_url"],
-            # InstalledAppFlow knows its own loopback URIs—no need to specify redirect_uris
+            "redirect_uris": [st.secrets["oauth"]["redirect_uri"]]
         }
     }
 
+    # 2. Create the flow
     flow = InstalledAppFlow.from_client_config(client_config, scopes=SCOPES)
-    # This spins up a temporary localhost server and opens the browser for you:
-    creds = flow.run_local_server(port=0)
-
-    # Store credentials
-    st.session_state[TOKEN_KEY] = creds_to_dict(creds)
-
-    # Verify ID token and capture user info
-    idinfo = id_token.verify_oauth2_token(
-        creds.id_token,
-        google_requests.Request(),
-        st.secrets["google_client_id"]
+    # 3. Generate the authorization URL
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent"
     )
-    st.session_state[USER_KEY] = {
-        "email":   idinfo.get("email"),
-        "name":    idinfo.get("name"),
-        "picture": idinfo.get("picture")
-    }
+
+    # 4. Show the URL to the user
+    st.markdown("### Google Login Required")
+    st.write("1. Click this link to open the Google consent screen:")
+    st.write(f"[Open Google Login]({auth_url})")
+    st.write("2. After allowing access, you will get a code—paste it below.")
+
+    # 5. Accept the code
+    code = st.text_input("Enter Google authorization code:")
+
+    # 6. Exchange code for tokens
+    if code:
+        try:
+            flow.fetch_token(code=code)
+            creds = flow.credentials
+            # 7. Save credentials
+            st.session_state[TOKEN_KEY] = creds_to_dict(creds)
+            # 8. Verify ID token and store user info
+            idinfo = id_token.verify_oauth2_token(
+                creds.id_token,
+                google_requests.Request(),
+                st.secrets["google_client_id"]
+            )
+            st.session_state[USER_KEY] = {
+                "email":   idinfo["email"],
+                "name":    idinfo["name"],
+                "picture": idinfo.get("picture")
+            }
+            st.success("🔒 Logged in as " + idinfo["email"])
+        except Exception as e:
+            st.error(f"Failed to fetch token: {e}")
+            
 # Convert credentials to dict and back
 def creds_to_dict(creds):
     return {
