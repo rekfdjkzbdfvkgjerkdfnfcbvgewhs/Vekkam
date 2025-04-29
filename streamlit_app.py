@@ -93,7 +93,7 @@ loader_html = """
     // Update interval set to 550ms for a total of ~55 seconds to reach 100%
     const interval = setInterval(() => {
       progress = (progress + 1) % 101;  // Loop progress from 0 to 100 repeatedly
-      progressText.textContent = `Loading... ${progress}%`;
+      progressText.textContent = Loading... ${progress}%;
     }, 550);
     
     // Clear the interval when loader is removed
