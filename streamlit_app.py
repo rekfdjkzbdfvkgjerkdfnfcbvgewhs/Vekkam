@@ -38,7 +38,7 @@ def login_ui():
         'access_type': 'offline',
         'prompt': 'consent'
     }
-    auth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
+    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
     st.markdown(f"[Login with Google]({auth_url})")
     code = st.text_input("Authorization code:")
     if st.button("Authenticate") and code:
