@@ -8,10 +8,6 @@ CLIENT_SECRET = st.secrets["google"]["client_secret"]
 REDIRECT_URI  = st.secrets["google"]["redirect_uri"]
 SCOPES        = ["openid", "email", "profile"]
 
-# Verify these values match exactly what’s in Google Cloud:
-st.write("🔑 Client ID:", CLIENT_ID)
-st.write("🔒 Redirect URI:", REDIRECT_URI)
-
 # --- SESSION STATE INIT ---
 for key in ("token", "user"):
     if key not in st.session_state:
