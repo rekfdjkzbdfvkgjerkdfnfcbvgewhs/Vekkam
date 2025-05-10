@@ -108,7 +108,7 @@ st.markdown("""
                 font-size: 16px;
                 border-radius: 8px;
                 cursor: pointer;
-                transition: background-color 0.3s;
+                transition: background-color 0.3s ease;
             ">
                 Visit Vekkam Blog
             </button>
