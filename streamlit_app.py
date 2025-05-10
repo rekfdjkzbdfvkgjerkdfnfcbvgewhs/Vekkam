@@ -63,6 +63,9 @@ lottie_json = {
 # ---------------------------
 st.markdown("<h1>Vekkam Premier</h1>", unsafe_allow_html=True)
 st.markdown("<h3>We're working on something big behind the scenes, so stay tuned for an unforgettable launch.</h3>", unsafe_allow_html=True)
+st.markdown("<h5>Vekkam is an AI-driven educational platform designed to help students study more efficiently by generating personalized study plans. By leveraging neuroscience, behavioral science, and real-world exam performance data, Vekkam creates individualized 6-hour study schedules tailored to each student's unique learning style. This approach aims to optimize study time, enabling students to balance academic responsibilities with extracurricular activities effectively.
+
+</h3>", unsafe_allow_html=True)
 
 st.markdown("""
     <div style="text-align: center; margin-top: 30px;">
