@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import datetime
 from streamlit_lottie import st_lottie
 from streamlit_autorefresh import st_autorefresh
+import json
 
 # ---------------------------
 # Page configuration
@@ -26,12 +27,6 @@ body {
     background: radial-gradient(circle at center, #000000, #141414);
     color: #FFFFFF;
 }
-#main-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
 h1, h2, h3, h4, h5 {
     text-align: center;
     color: white;
@@ -47,21 +42,14 @@ h1, h2, h3, h4, h5 {
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Embedded Lottie JSON (placeholder)
+# Load Lottie animation from file
 # ---------------------------
-lottie_json = {
-    "v": "4.8.0",
-    "fr": 30,
-    "ip": 0,
-    "op": 180,
-    "w": 1200,
-    "h": 1200,
-    "nm": "5- Data Writing Job Content",
-    "ddd": 0,
-    "assets": [],
-    "layers": [],
-    "markers": []
-}
+try:
+    with open("Animation - 1746878176459.json", "r") as f:
+        lottie_json = json.load(f)
+except Exception as e:
+    lottie_json = None
+    st.error(f"⚠️ Could not load Lottie animation: {e}")
 
 # ---------------------------
 # Display Content
@@ -71,8 +59,8 @@ st.markdown("<h3>We're working on something big behind the scenes, so stay tuned
 
 st.markdown("""
 <h5>
-Vekkam is an AI-driven educational platform designed to help students study more efficiently by generating personalized study plans. 
-By leveraging neuroscience, behavioral science, and real-world exam performance data, Vekkam creates individualized 6-hour study schedules tailored to each student's unique learning style. 
+Vekkam is an AI-driven educational platform designed to help students study more efficiently by generating personalized study plans.
+By leveraging neuroscience, behavioral science, and real-world exam performance data, Vekkam creates individualized 6-hour study schedules tailored to each student's unique learning style.
 This approach aims to optimize study time, enabling students to balance academic responsibilities with extracurricular activities effectively.
 </h5>
 """, unsafe_allow_html=True)
@@ -99,10 +87,11 @@ st.markdown("""
 # ---------------------------
 # Lottie animation
 # ---------------------------
-st_lottie(lottie_json, height=300, key="premiere")
+if lottie_json:
+    st_lottie(lottie_json, height=300, key="premiere")
 
 # ---------------------------
-# Countdown Timer Display
+# Countdown Logic
 # ---------------------------
 target_date = datetime(2025, 6, 30, 0, 0, 0)
 now = datetime.now()
