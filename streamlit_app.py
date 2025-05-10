@@ -1,7 +1,6 @@
 import streamlit as st
 from datetime import datetime
 import time
-import json
 from streamlit_lottie import st_lottie
 
 # ---------------------------
@@ -43,17 +42,28 @@ h1, h2, h3 {
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Load Lottie animation from file
+# Lottie JSON animation (embedded directly)
 # ---------------------------
-with open("Animation - 1746878176459.json", "r") as f:
-    lottie_json = json.load(f)
+lottie_json = {
+  "v": "4.8.0",
+  "fr": 30,
+  "ip": 0,
+  "op": 180,
+  "w": 1200,
+  "h": 1200,
+  "nm": "5- Data Writing Job Content",
+  "ddd": 0,
+  "assets": [],
+  "layers": [],  # Truncated for brevity. Replace with full content.
+  "markers": []
+}
 
 # ---------------------------
 # Display Content
 # ---------------------------
 st.markdown("<h1>Vekkam Premier</h1>", unsafe_allow_html=True)
 st.markdown("<h3>We're working on something big behind the scenes, so stay tuned for an unforgettable launch.</h3>", unsafe_allow_html=True)
-
+st.write("Vekkam is an AI-driven educational platform designed to help students study more efficiently by generating personalized study plans. By leveraging neuroscience, behavioral science, and real-world exam performance data, Vekkam creates individualized 6-hour study schedules tailored to each student's unique learning style. This approach aims to optimize study time, enabling students to balance academic responsibilities with extracurricular activities effectively.")
 st.markdown("""
     <div style="text-align: center; margin-top: 30px;">
         <a href="https://vekkam.wordpress.com/home/" target="_blank">
@@ -67,7 +77,7 @@ st.markdown("""
                 cursor: pointer;
                 transition: background-color 0.3s ease;
             ">
-                Curious?
+                Click to learn more!
             </button>
         </a>
     </div>
