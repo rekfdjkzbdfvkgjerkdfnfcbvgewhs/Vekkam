@@ -44,7 +44,7 @@ def load_lottie_file(filepath: str):
     with open(filepath, "r") as f:
         return json.load(f)
 
-lottie_json = load_lottie_file("path_to_your_local_lottie_file.json")
+lottie_json = load_lottie_file("https://github.com/rekfdjkzbdfvkgjerkdfnfcbvgewhs/Vekkam/blob/main/Animation%20-%201746858208440.json")
 
 # Container for animation and timer
 st_lottie(lottie_json, height=250, key="premiere_intro")
