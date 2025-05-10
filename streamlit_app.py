@@ -1,18 +1,8 @@
 import streamlit as st
 from datetime import datetime
 import time
-import requests
+import json
 from streamlit_lottie import st_lottie
-
-# ---------------------------
-# Function to load Lottie animation
-# ---------------------------
-def load_lottie_url(url: str):
-    r = requests.get(url)
-    if r.status_code == 200:
-        return r.json()
-    else:
-        return None
 
 # ---------------------------
 # Page configuration
@@ -53,10 +43,10 @@ h1, h2, h3 {
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Load Lottie animation
+# Load Lottie animation from file
 # ---------------------------
-lottie_url = "https://assets2.lottiefiles.com/packages/lf20_mDnmhAgZkb.json"  # Replace with another animation if needed
-lottie_json = load_lottie_url(lottie_url)
+with open("Animation - 1746878176459.json", "r") as f:
+    lottie_json = json.load(f)
 
 # ---------------------------
 # Display Content
@@ -84,10 +74,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Lottie animation
-if lottie_json:
-    st_lottie(lottie_json, height=300, key="premiere")
-else:
-    st.error("⚠️ Lottie animation could not be loaded.")
+st_lottie(lottie_json, height=300, key="premiere")
 
 # ---------------------------
 # Countdown Logic
@@ -112,7 +99,3 @@ while True:
 # Footer Text
 # ---------------------------
 st.markdown("<br><h4 style='text-align: center;'>📅 Mark your calendars: June 30, 2025</h4>", unsafe_allow_html=True)
-
-# ---------------------------
-# External Link Button
-# ---------------------------
