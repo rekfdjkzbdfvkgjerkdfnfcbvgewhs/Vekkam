@@ -1,7 +1,7 @@
 import streamlit as st
-import time
-import requests
+import json
 from datetime import datetime
+import time
 from streamlit_lottie import st_lottie
 
 # Page configuration
@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for YouTube Premier style
+# Custom CSS for YouTube Premiere style
 page_css = """
 <style>
 body {
@@ -39,22 +39,16 @@ body {
 """
 st.markdown(page_css, unsafe_allow_html=True)
 
-# Load Lottie animation (YouTube Premiere style intro)
-@st.cache(ttl=3600)
-def load_lottie(url: str):
-    r = requests.get(url)
-    if r.status_code == 200:
-        return r.json()
-    return None
+# Load Lottie animation from local file
+def load_lottie_file(filepath: str):
+    with open(filepath, "r") as f:
+        return json.load(f)
 
-lottie_url = "https://assets9.lottiefiles.com/packages/lf20_jh79vf.json"  # Premiere intro animation
-lottie_json = load_lottie(lottie_url)
+lottie_json = load_lottie_file("path_to_your_local_lottie_file.json")
 
 # Container for animation and timer
-title = st.empty()
-with st.container():
-    st_lottie(lottie_json, height=250, key="premiere_intro")
-    timer_placeholder = st.empty()
+st_lottie(lottie_json, height=250, key="premiere_intro")
+timer_placeholder = st.empty()
 
 # Countdown logic
 target_date = datetime(2025, 6, 30, 0, 0, 0)
