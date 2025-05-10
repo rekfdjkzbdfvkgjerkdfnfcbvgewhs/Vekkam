@@ -1,15 +1,7 @@
 import streamlit as st
 from datetime import datetime
 import time
-import json
 from streamlit_lottie import st_lottie
-
-# ---------------------------
-# Load Lottie animation from local file
-# ---------------------------
-def load_lottie_file(filepath: str):
-    with open(filepath, "r") as f:
-        return json.load(f)
 
 # ---------------------------
 # Page configuration
@@ -44,24 +36,34 @@ h1, h2, h3 {
     font-weight: bold;
     text-align: center;
     color: #FFD700;
-    margin-top: -30px;
+    margin-top: 100px; /* moved lower */
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Load the Lottie animation
-try:
-    lottie_json = load_lottie_file("Animation - 1746878176459.json")
-    st_lottie(lottie_json, height=300, key="premiere")
-except Exception as e:
-    st.error(f"Could not load animation: {e}")
+# ---------------------------
+# Embedded Lottie JSON (truncated — insert full content here)
+# ---------------------------
+lottie_json = {
+  "v": "4.8.0",
+  "fr": 30,
+  "ip": 0,
+  "op": 180,
+  "w": 1200,
+  "h": 1200,
+  "nm": "5- Data Writing Job Content",
+  "ddd": 0,
+  "assets": [],
+  "layers": [],  # Replace this with full layer data from your file
+  "markers": []
+}
 
 # ---------------------------
 # Display Content
 # ---------------------------
 st.markdown("<h1>Vekkam Premier</h1>", unsafe_allow_html=True)
 st.markdown("<h3>We're working on something big behind the scenes, so stay tuned for an unforgettable launch.</h3>", unsafe_allow_html=True)
-st.write("Vekkam is an AI-driven educational platform designed to help students study more efficiently by generating personalized study plans. By leveraging neuroscience, behavioral science, and real-world exam performance data, Vekkam creates individualized 6-hour study schedules tailored to each student's unique learning style. This approach aims to optimize study time, enabling students to balance academic responsibilities with extracurricular activities effectively.")
+
 st.markdown("""
     <div style="text-align: center; margin-top: 30px;">
         <a href="https://vekkam.wordpress.com/home/" target="_blank">
@@ -75,11 +77,14 @@ st.markdown("""
                 cursor: pointer;
                 transition: background-color 0.3s ease;
             ">
-                Click to Learn more!
+                Curious?
             </button>
         </a>
     </div>
 """, unsafe_allow_html=True)
+
+# Lottie animation
+st_lottie(lottie_json, height=300, key="premiere")
 
 # ---------------------------
 # Countdown Logic
@@ -101,6 +106,6 @@ while True:
     time.sleep(1)
 
 # ---------------------------
-# Footer
+# Footer Text
 # ---------------------------
 st.markdown("<br><h4 style='text-align: center;'>📅 Mark your calendars: June 30, 2025</h4>", unsafe_allow_html=True)
