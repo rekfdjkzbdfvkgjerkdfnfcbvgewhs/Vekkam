@@ -12,29 +12,32 @@ import plotly.graph_objects as go
 import re
 
 # --- Configuration from st.secrets ---
-raw_uri       = st.secrets["google"]["redirect_uri"]
-REDIRECT_URI  = raw_uri.rstrip("/") + "/"
-CLIENT_ID     = st.secrets["google"]["client_id"]
-CLIENT_SECRET = st.secrets["google"]["client_secret"]
-SCOPES        = ["openid", "email", "profile"]
-GEMINI_API_KEY = st.secrets["gemini"]["api_key"]
-CSE_API_KEY    = st.secrets["google_search"]["api_key"]
-CSE_ID         = st.secrets["google_search"]["cse_id"]
+raw_uri        = st.secrets.google.redirect_uri
+CLIENT_ID      = st.secrets.google.client_id
+CLIENT_SECRET  = st.secrets.google.client_secret
+SCOPES         = ["openid", "email", "profile"]
+GEMINI_API_KEY = st.secrets.gemini.api_key
+CSE_API_KEY    = st.secrets.google_search.api_key
+CSE_ID         = st.secrets.google_search.cse_id
 CACHE_TTL      = 3600
 
-# --- Session State ---
+# --- Compute redirect URI ---
+# Ensure exact match with Google Console configuration
+REDIRECT_URI = raw_uri.rstrip('/')
+
+# --- Session State Initialization ---
 for key in ("token", "user"):
     if key not in st.session_state:
         st.session_state[key] = None
 
-# --- OAuth Flow using st.query_params ---
+# --- OAuth Flow ---
 def ensure_logged_in():
-    params = st.query_params
-    code = params.get("code")  # returns a str or None
+    params = st.experimental_get_query_params()
+    code = params.get("code", [None])[0]
 
     # Exchange code for token
     if code and not st.session_state.token:
-        res = requests.post(
+        token_resp = requests.post(
             "https://oauth2.googleapis.com/token",
             data={
                 "code": code,
@@ -44,23 +47,23 @@ def ensure_logged_in():
                 "grant_type": "authorization_code"
             }
         )
-        if res.status_code != 200:
-            st.error(f"Token exchange failed ({res.status_code}): {res.text}")
+        if not token_resp.ok:
+            st.error(f"Token exchange failed ({token_resp.status_code}): {token_resp.text}")
             st.stop()
-        st.session_state.token = res.json()
+        st.session_state.token = token_resp.json()
 
         # Clear code from URL
-        st.query_params.clear()
+        st.experimental_set_query_params()
 
         # Fetch user info
-        ui = requests.get(
+        ui_resp = requests.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
             headers={"Authorization": f"Bearer {st.session_state.token['access_token']}"}
         )
-        if ui.status_code != 200:
+        if not ui_resp.ok:
             st.error("Failed to fetch user info.")
             st.stop()
-        st.session_state.user = ui.json()
+        st.session_state.user = ui_resp.json()
 
     # If still not logged in, show Login link
     if not st.session_state.token:
@@ -78,10 +81,10 @@ def ensure_logged_in():
         st.markdown(f"[**Login with Google**]({auth_url})")
         st.stop()
 
-# Run OAuth check at startup
+# Run OAuth check
 ensure_logged_in()
 
-# --- After authentication UI ---
+# --- Sidebar User Info & Logout ---
 user = st.session_state.user
 st.sidebar.image(user.get("picture", ""), width=48)
 st.sidebar.write(user.get("email", ""))
@@ -91,21 +94,24 @@ if st.sidebar.button("Logout"):
 
 # --- Gemini Call ---
 def call_gemini(prompt, temp=0.7, max_tokens=2048):
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    endpoint = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": temp, "maxOutputTokens": max_tokens}
     }
-    return requests.post(url, json=payload).json()["candidates"][0]["content"]["parts"][0]["text"]
+    response = requests.post(endpoint, json=payload)
+    response.raise_for_status()
+    return response.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 # --- PDF/Text Extraction ---
 def extract_pages_from_url(pdf_url):
     r = requests.get(pdf_url)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    tmp.write(r.content); tmp.flush()
+    tmp.write(r.content)
+    tmp.flush()
     reader = PdfReader(tmp.name)
     return {i+1: reader.pages[i].extract_text() for i in range(len(reader.pages))}
 
@@ -121,7 +127,7 @@ def extract_text(file):
         return pytesseract.image_to_string(Image.open(file))
     return StringIO(file.getvalue().decode()).read()
 
-# --- Guide Book Search & Concept Q&A ---
+# --- Search & Q&A Helpers ---
 def fetch_pdf_url(title, author, edition):
     q = " ".join(filter(None, [title, author, edition]))
     params = {"key": CSE_API_KEY, "cx": CSE_ID, "q": q, "fileType": "pdf", "num": 1}
@@ -135,9 +141,9 @@ def find_concept_pages(pages, concept):
 def ask_concept(pages, concept):
     found = find_concept_pages(pages, concept)
     if not found:
-        return f"Couldn’t find '{concept}'."
+        return f"Couldn’t find '{concept}' in document."
     combined = "\n---\n".join(f"Page {p}: {t}" for p, t in found.items())
-    return call_gemini(f"Concept: '{concept}'. Sections:\n{combined}\nExplain with context and examples.")
+    return call_gemini(f"Explain concept '{concept}' with context and examples.\nSections:\n{combined}")
 
 # --- Learning Aids & Mind Map ---
 def generate_summary(text):         return call_gemini(f"Summarize for exam, list formulae:\n{text}")
@@ -179,8 +185,9 @@ def plot_mind_map(json_text):
     edge_trace = go.Scatter(x=edge_x, y=edge_y, mode="lines", hoverinfo="none")
     node_trace = go.Scatter(x=x, y=y, text=g.vs["label"], mode="markers+text", textposition="top center",
                             marker=dict(size=20, line=dict(width=2)))
-    fig = go.Figure([edge_trace, node_trace],
-        layout=go.Layout(margin=dict(l=0,r=0,t=20,b=0), xaxis=dict(visible=False), yaxis=dict(visible=False)))
+    fig = go.Figure([edge_trace, node_trace], layout=go.Layout(
+        margin=dict(l=0,r=0,t=20,b=0), xaxis=dict(visible=False), yaxis=dict(visible=False)
+    ))
     st.plotly_chart(fig, use_container_width=True)
 
 # --- Main UI ---
@@ -196,11 +203,11 @@ if tab == "Guide Book Chat":
     if st.button("Chat") and concept:
         url = fetch_pdf_url(title, author, edition)
         if not url:
-            st.error("PDF not found")
+            st.error("PDF not found on the web.")
         else:
             pages = extract_pages_from_url(url)
-            st.write(ask_concept(pages, concept))
-
+            answer = ask_concept(pages, concept)
+            st.write(answer)
 else:
     st.header("Document Q&A")
     uploaded = st.file_uploader("Upload PDF/Image/TXT", type=["pdf","jpg","png","txt"])
