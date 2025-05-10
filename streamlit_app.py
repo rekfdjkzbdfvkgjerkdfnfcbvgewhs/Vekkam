@@ -1,7 +1,7 @@
 import streamlit as st
 from datetime import datetime
-import time
 from streamlit_lottie import st_lottie
+from streamlit_autorefresh import st_autorefresh
 
 # ---------------------------
 # Page configuration
@@ -11,6 +11,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# ---------------------------
+# Auto-refresh every second
+# ---------------------------
+st_autorefresh(interval=1000, key="countdown_refresh")
 
 # ---------------------------
 # Custom CSS styling
@@ -27,7 +32,7 @@ body {
     align-items: center;
     justify-content: center;
 }
-h1, h2, h3 {
+h1, h2, h3, h4, h5 {
     text-align: center;
     color: white;
 }
@@ -36,26 +41,26 @@ h1, h2, h3 {
     font-weight: bold;
     text-align: center;
     color: #FFD700;
-    margin-top: 100px; /* moved lower */
+    margin-top: 100px;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Embedded Lottie JSON (truncated — insert full content here)
+# Embedded Lottie JSON (placeholder)
 # ---------------------------
 lottie_json = {
-  "v": "4.8.0",
-  "fr": 30,
-  "ip": 0,
-  "op": 180,
-  "w": 1200,
-  "h": 1200,
-  "nm": "5- Data Writing Job Content",
-  "ddd": 0,
-  "assets": [],
-  "layers": [],  # Replace this with full layer data from your file
-  "markers": []
+    "v": "4.8.0",
+    "fr": 30,
+    "ip": 0,
+    "op": 180,
+    "w": 1200,
+    "h": 1200,
+    "nm": "5- Data Writing Job Content",
+    "ddd": 0,
+    "assets": [],
+    "layers": [],
+    "markers": []
 }
 
 # ---------------------------
@@ -63,9 +68,14 @@ lottie_json = {
 # ---------------------------
 st.markdown("<h1>Vekkam Premier</h1>", unsafe_allow_html=True)
 st.markdown("<h3>We're working on something big behind the scenes, so stay tuned for an unforgettable launch.</h3>", unsafe_allow_html=True)
-st.markdown("<h5>Vekkam is an AI-driven educational platform designed to help students study more efficiently by generating personalized study plans. By leveraging neuroscience, behavioral science, and real-world exam performance data, Vekkam creates individualized 6-hour study schedules tailored to each student's unique learning style. This approach aims to optimize study time, enabling students to balance academic responsibilities with extracurricular activities effectively.
 
-</h3>", unsafe_allow_html=True)
+st.markdown("""
+<h5>
+Vekkam is an AI-driven educational platform designed to help students study more efficiently by generating personalized study plans. 
+By leveraging neuroscience, behavioral science, and real-world exam performance data, Vekkam creates individualized 6-hour study schedules tailored to each student's unique learning style. 
+This approach aims to optimize study time, enabling students to balance academic responsibilities with extracurricular activities effectively.
+</h5>
+""", unsafe_allow_html=True)
 
 st.markdown("""
     <div style="text-align: center; margin-top: 30px;">
@@ -86,27 +96,26 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# ---------------------------
 # Lottie animation
+# ---------------------------
 st_lottie(lottie_json, height=300, key="premiere")
 
 # ---------------------------
-# Countdown Logic
+# Countdown Timer Display
 # ---------------------------
 target_date = datetime(2025, 6, 30, 0, 0, 0)
-timer_placeholder = st.empty()
+now = datetime.now()
+remaining = target_date - now
 
-while True:
-    now = datetime.now()
-    remaining = target_date - now
-    if remaining.total_seconds() <= 0:
-        timer_placeholder.markdown("<div id='timer'>🎉 PREMIERE NOW! 🎉</div>", unsafe_allow_html=True)
-        break
+if remaining.total_seconds() <= 0:
+    st.markdown("<div id='timer'>🎉 PREMIERE NOW! 🎉</div>", unsafe_allow_html=True)
+else:
     days = remaining.days
     hours, rem = divmod(remaining.seconds, 3600)
     minutes, seconds = divmod(rem, 60)
     countdown = f"<div id='timer'>{days}d {hours:02}h {minutes:02}m {seconds:02}s</div>"
-    timer_placeholder.markdown(countdown, unsafe_allow_html=True)
-    time.sleep(1)
+    st.markdown(countdown, unsafe_allow_html=True)
 
 # ---------------------------
 # Footer Text
