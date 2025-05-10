@@ -66,7 +66,7 @@ st.markdown("<h3>We're working on something big behind the scenes, so stay tuned
 
 st.markdown("""
     <div style="text-align: center; margin-top: 30px;">
-        <a href="https://vekkam.wordpress.com" target="_blank">
+        <a href="https://vekkam.wordpress.com/home/" target="_blank">
             <button style="
                 background-color: #FF3131;
                 color: white;
