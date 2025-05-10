@@ -12,9 +12,8 @@ import plotly.graph_objects as go
 import re
 
 # --- Configuration using st.secrets ---
-raw_uri      = st.secrets["google"]["redirect_uri"]
-# Ensure exactly one trailing slash
-REDIRECT_URI = raw_uri.rstrip("/") + "/"
+raw_uri       = st.secrets["google"]["redirect_uri"]
+REDIRECT_URI  = raw_uri.rstrip("/") + "/"
 CLIENT_ID     = st.secrets["google"]["client_id"]
 CLIENT_SECRET = st.secrets["google"]["client_secret"]
 SCOPES        = ["openid", "email", "profile"]
@@ -23,6 +22,12 @@ CSE_API_KEY    = st.secrets["google_search"]["api_key"]
 CSE_ID         = st.secrets["google_search"]["cse_id"]
 CACHE_TTL      = 3600
 
+# --- Show exact values for Google Cloud registration ---
+st.sidebar.markdown("**Authorized Redirect URI**")
+st.sidebar.code(REDIRECT_URI)
+st.sidebar.markdown("**Client ID**")
+st.sidebar.code(CLIENT_ID)
+
 # --- Session State ---
 for key in ("token", "user"):
     if key not in st.session_state:
@@ -30,8 +35,9 @@ for key in ("token", "user"):
 
 # --- OAuth Flow ---
 def ensure_logged_in():
-    params = st.query_params()
-    code = params.get("code", [None])[0]
+    # Use the non-experimental API to get query params
+    params = st.get_query_params()
+    code   = params.get("code", [None])[0]
 
     # Exchange code for token
     if code and not st.session_state.token:
@@ -60,7 +66,7 @@ def ensure_logged_in():
             st.stop()
         st.session_state.user = ui.json()
 
-    # If no token yet, show login link and halt
+    # If still not authenticated, show login link and halt
     if not st.session_state.token:
         auth_url = (
             "https://accounts.google.com/o/oauth2/v2/auth?"
@@ -76,7 +82,7 @@ def ensure_logged_in():
         st.markdown(f"[**Login with Google**]({auth_url})")
         st.stop()
 
-# Run OAuth check at top
+# Perform OAuth check at the top
 ensure_logged_in()
 
 # --- After authentication ---
@@ -158,7 +164,6 @@ def plot_mind_map(json_text):
         return
 
     nodes, edges, counter = [], [], 0
-    id_map = {}
 
     def add_node(node, parent=None):
         nonlocal counter
@@ -190,7 +195,9 @@ def plot_mind_map(json_text):
         marker=dict(size=20, line=dict(width=2))
     )
     fig = go.Figure([edge_trace, node_trace],
-        layout=go.Layout(margin=dict(l=0,r=0,t=20,b=0), xaxis=dict(visible=False), yaxis=dict(visible=False))
+        layout=go.Layout(margin=dict(l=0, r=0, t=20, b=0),
+                         xaxis=dict(visible=False),
+                         yaxis=dict(visible=False))
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -198,7 +205,6 @@ def plot_mind_map(json_text):
 st.title(f"Welcome, {user.get('name', '')}!")
 
 tab = st.sidebar.selectbox("Feature", ["Guide Book Chat", "Document Q&A"])
-
 if tab == "Guide Book Chat":
     st.header("Guide Book Chat")
     title   = st.text_input("Title")
@@ -212,7 +218,6 @@ if tab == "Guide Book Chat":
         else:
             pages = extract_pages_from_url(url)
             st.write(ask_concept(pages, concept))
-
 else:
     st.header("Document Q&A")
     uploaded = st.file_uploader("Upload PDF/Image/TXT", type=["pdf", "jpg", "png", "txt"])
