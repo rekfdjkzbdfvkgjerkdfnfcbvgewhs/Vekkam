@@ -88,7 +88,7 @@ st.markdown("""
 # Lottie animation
 # ---------------------------
 if lottie_json:
-    st_lottie(lottie_json, height=300, key="premiere")
+    st_lottie(lottie_json, height=500, key="premiere")
 
 # ---------------------------
 # Countdown Logic
