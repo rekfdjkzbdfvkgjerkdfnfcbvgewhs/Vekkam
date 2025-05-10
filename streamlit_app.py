@@ -59,7 +59,7 @@ st.markdown("<h3>We're working on something big behind the scenes, so stay tuned
 
 st.markdown("""
 <h5>
-Running on caffeine and chaos before exams? Been there. That’s exactly why we built Vekkam — your AI-powered study partner that turns your notes into flashcards, cheat sheets, quizzes, and mind maps. In seconds. No more scrolling through 87-slide PPTs or pretending to “revise” — we do the heavy lifting so you can focus on actually learning. Built for Indian university students, Vekkam isn’t just another AI tool that solves math — we handle everything, from history to finance, and we get how you learn best. Think cognitive profiling, personalized study material, and a product that works harder than your toppers’ WhatsApp group. We’re here to flip the system. Studying? Sorted.
+Running on caffeine and chaos before exams? Been there. That’s exactly why we built Vekkam — your AI-powered study partner that turns your notes into flashcards, cheat sheets, quizzes, and mind maps. In seconds. No more scrolling through 87-slide PPTs or pretending to “revise” — we do the heavy lifting so you can focus on actually learning. Built for University students, Vekkam isn’t just another AI tool that solves math — we handle everything, from history to finance, and we get how you learn best. Think cognitive profiling, personalized study material, and a product that works harder than your toppers’ WhatsApp group. We’re here to flip the system. Studying? Sorted.
 </h5>
 """, unsafe_allow_html=True)
 
