@@ -93,3 +93,25 @@ while True:
 # Footer Text
 # ---------------------------
 st.markdown("<br><h4 style='text-align: center;'>📅 Mark your calendars: June 30, 2025</h4>", unsafe_allow_html=True)
+
+# ---------------------------
+# External Link Button
+# ---------------------------
+st.markdown("""
+    <div style="text-align: center; margin-top: 30px;">
+        <a href="https://vekkam.wordpress.com" target="_blank">
+            <button style="
+                background-color: #FF3131;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                font-size: 16px;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            ">
+                Visit Vekkam Blog
+            </button>
+        </a>
+    </div>
+""", unsafe_allow_html=True)
