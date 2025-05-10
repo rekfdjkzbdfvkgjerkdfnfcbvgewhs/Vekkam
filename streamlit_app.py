@@ -1,15 +1,78 @@
 import streamlit as st
 from datetime import datetime
 import time
+import requests
+from streamlit_lottie import st_lottie
 
-st.set_page_config(page_title="🎬 Premiere Countdown", layout="wide")
+# ---------------------------
+# Function to load Lottie animation
+# ---------------------------
+def load_lottie_url(url: str):
+    r = requests.get(url)
+    if r.status_code == 200:
+        return r.json()
+    else:
+        return None
 
-# Title and headers
-st.markdown("<h1 style='text-align: center;'>🎬 Premiere Countdown</h1>", unsafe_allow_html=True)
-st.header("Get Ready for the Big Event!")
-st.subheader("Counting down to June 30, 2025")
+# ---------------------------
+# Page configuration
+# ---------------------------
+st.set_page_config(
+    page_title="🎬 Premiere Countdown",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# Countdown logic
+# ---------------------------
+# Custom CSS styling
+# ---------------------------
+st.markdown("""
+<style>
+body {
+    background: radial-gradient(circle at center, #000000, #141414);
+    color: #FFFFFF;
+}
+#main-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+h1, h2, h3 {
+    text-align: center;
+    color: white;
+}
+#timer {
+    font-size: 5rem;
+    font-weight: bold;
+    text-align: center;
+    color: #FFD700;
+    margin-top: -30px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------
+# Load Lottie animation
+# ---------------------------
+lottie_url = "https://assets2.lottiefiles.com/packages/lf20_mDnmhAgZkb.json"  # Replace with another animation if needed
+lottie_json = load_lottie_url(lottie_url)
+
+# ---------------------------
+# Display Content
+# ---------------------------
+st.markdown("<h1>🎬 YouTube Premiere Countdown</h1>", unsafe_allow_html=True)
+st.markdown("<h3>⏳ The show begins soon. Stay tuned!</h3>", unsafe_allow_html=True)
+
+# Lottie animation
+if lottie_json:
+    st_lottie(lottie_json, height=300, key="premiere")
+else:
+    st.error("⚠️ Lottie animation could not be loaded.")
+
+# ---------------------------
+# Countdown Logic
+# ---------------------------
 target_date = datetime(2025, 6, 30, 0, 0, 0)
 timer_placeholder = st.empty()
 
@@ -17,15 +80,16 @@ while True:
     now = datetime.now()
     remaining = target_date - now
     if remaining.total_seconds() <= 0:
-        timer_placeholder.markdown("<h2 style='text-align: center;'>🎉 PREMIERE NOW! 🎉</h2>", unsafe_allow_html=True)
+        timer_placeholder.markdown("<div id='timer'>🎉 PREMIERE NOW! 🎉</div>", unsafe_allow_html=True)
         break
     days = remaining.days
     hours, rem = divmod(remaining.seconds, 3600)
     minutes, seconds = divmod(rem, 60)
-    timer_str = f"<h2 style='text-align: center;'>{days}d {hours:02}h {minutes:02}m {seconds:02}s</h2>"
-    timer_placeholder.markdown(timer_str, unsafe_allow_html=True)
+    countdown = f"<div id='timer'>{days}d {hours:02}h {minutes:02}m {seconds:02}s</div>"
+    timer_placeholder.markdown(countdown, unsafe_allow_html=True)
     time.sleep(1)
 
-# Additional text
-st.markdown("**Don't miss out!** The premiere starts in:")
-st.text("Stay tuned for more updates.")
+# ---------------------------
+# Footer Text
+# ---------------------------
+st.markdown("<br><h4 style='text-align: center;'>📅 Mark your calendars: June 30, 2025</h4>", unsafe_allow_html=True)
