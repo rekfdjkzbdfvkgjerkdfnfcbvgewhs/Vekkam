@@ -21,10 +21,6 @@ CSE_API_KEY    = st.secrets.google_search.api_key
 CSE_ID         = st.secrets.google_search.cse_id
 CACHE_TTL      = 3600
 
-# --- Compute redirect URI ---
-# Ensure exact match with Google Console configuration
-REDIRECT_URI = raw_uri.rstrip('/')
-
 # --- Session State Initialization ---
 for key in ("token", "user"):
     if key not in st.session_state:
