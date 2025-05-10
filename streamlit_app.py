@@ -22,26 +22,25 @@ CSE_API_KEY    = st.secrets["google_search"]["api_key"]
 CSE_ID         = st.secrets["google_search"]["cse_id"]
 CACHE_TTL      = 3600
 
-# --- Display values for exact Cloud Console registration ---
+# --- Show exact values for Console registration ---
 st.sidebar.markdown("**Authorized Redirect URI**")
 st.sidebar.code(REDIRECT_URI)
 st.sidebar.markdown("**Client ID**")
 st.sidebar.code(CLIENT_ID)
 
-# --- Session State init ---
+# --- Session State ---
 for key in ("token", "user"):
     if key not in st.session_state:
         st.session_state[key] = None
 
-# --- OAuth Flow ---
+# --- OAuth Flow using st.query_params ---
 def ensure_logged_in():
-    # use the experimental API to read the URL query params
-    params = st.experimental_get_query_params()
-    code   = params.get("code", [None])[0]
+    params = st.query_params
+    code = params.get("code")  # returns a str or None
 
-    # if we got a code back and haven't tokenized yet, exchange it
+    # Exchange code for token
     if code and not st.session_state.token:
-        token_res = requests.post(
+        res = requests.post(
             "https://oauth2.googleapis.com/token",
             data={
                 "code": code,
@@ -51,12 +50,15 @@ def ensure_logged_in():
                 "grant_type": "authorization_code"
             }
         )
-        if token_res.status_code != 200:
-            st.error(f"Token exchange failed ({token_res.status_code}): {token_res.text}")
+        if res.status_code != 200:
+            st.error(f"Token exchange failed ({res.status_code}): {res.text}")
             st.stop()
-        st.session_state.token = token_res.json()
+        st.session_state.token = res.json()
 
-        # fetch user profile
+        # Clear code from URL
+        st.query_params.clear()
+
+        # Fetch user info
         ui = requests.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
             headers={"Authorization": f"Bearer {st.session_state.token['access_token']}"}
@@ -66,7 +68,7 @@ def ensure_logged_in():
             st.stop()
         st.session_state.user = ui.json()
 
-    # if still no token, show the login link and halt
+    # If still not logged in, show Login link
     if not st.session_state.token:
         auth_url = (
             "https://accounts.google.com/o/oauth2/v2/auth?"
@@ -82,18 +84,18 @@ def ensure_logged_in():
         st.markdown(f"[**Login with Google**]({auth_url})")
         st.stop()
 
-# perform OAuth at start
+# Run OAuth check at startup
 ensure_logged_in()
 
-# --- After login UI ---
+# --- After authentication UI ---
 user = st.session_state.user
-st.sidebar.image(user.get("picture", ""), width=50)
+st.sidebar.image(user.get("picture", ""), width=48)
 st.sidebar.write(user.get("email", ""))
 if st.sidebar.button("Logout"):
     st.session_state.clear()
     st.experimental_rerun()
 
-# --- Gemini call ---
+# --- Gemini Call ---
 def call_gemini(prompt, temp=0.7, max_tokens=2048):
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/"
@@ -103,8 +105,7 @@ def call_gemini(prompt, temp=0.7, max_tokens=2048):
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": temp, "maxOutputTokens": max_tokens}
     }
-    res = requests.post(url, json=payload).json()
-    return res["candidates"][0]["content"]["parts"][0]["text"]
+    return requests.post(url, json=payload).json()["candidates"][0]["content"]["parts"][0]["text"]
 
 # --- PDF/Text Extraction ---
 def extract_pages_from_url(pdf_url):
@@ -122,18 +123,17 @@ def extract_text(file):
     ext = file.name.lower().split('.')[-1]
     if ext == "pdf":
         return "\n".join(extract_pages_from_file(file).values())
-    if ext in ("jpg", "jpeg", "png"):
+    if ext in ("jpg","jpeg","png"):
         return pytesseract.image_to_string(Image.open(file))
     return StringIO(file.getvalue().decode()).read()
 
-# --- Guide Book Search ---
+# --- Guide Book Search & Concept Q&A ---
 def fetch_pdf_url(title, author, edition):
     q = " ".join(filter(None, [title, author, edition]))
     params = {"key": CSE_API_KEY, "cx": CSE_ID, "q": q, "fileType": "pdf", "num": 1}
     items = requests.get("https://www.googleapis.com/customsearch/v1", params=params).json().get("items", [])
     return items[0]["link"] if items else None
 
-# --- Concept Q&A ---
 def find_concept_pages(pages, concept):
     cl = concept.lower()
     return {p: t for p, t in pages.items() if cl in (t or "").lower()}
@@ -143,10 +143,9 @@ def ask_concept(pages, concept):
     if not found:
         return f"Couldn’t find '{concept}'."
     combined = "\n---\n".join(f"Page {p}: {t}" for p, t in found.items())
-    prompt = f"Concept: '{concept}'. Sections:\n{combined}\nExplain with context and examples."
-    return call_gemini(prompt)
+    return call_gemini(f"Concept: '{concept}'. Sections:\n{combined}\nExplain with context and examples.")
 
-# --- Learning Aids ---
+# --- Learning Aids & Mind Map ---
 def generate_summary(text):         return call_gemini(f"Summarize for exam, list formulae:\n{text}")
 def generate_questions(text):       return call_gemini(f"Generate 15 quiz questions:\n{text}")
 def generate_flashcards(text):      return call_gemini(f"Create flashcards (Q&A):\n{text}")
@@ -162,7 +161,6 @@ def plot_mind_map(json_text):
     except json.JSONDecodeError:
         st.error("Mind map JSON invalid.")
         return
-
     nodes, edges, counter = [], [], 0
     def add_node(node, parent=None):
         nonlocal counter
@@ -173,37 +171,28 @@ def plot_mind_map(json_text):
             edges.append((parent, nid))
         for child in node.get("children", []):
             add_node(child, nid)
-
     add_node(mind_map)
-
     g = ig.Graph(directed=True)
     g.add_vertices([str(n[0]) for n in nodes])
     g.vs["label"] = [n[1] for n in nodes]
-    g.add_edges([(str(u), str(v)) for u, v in edges])
+    g.add_edges([(str(u),str(v)) for u,v in edges])
     layout = g.layout("tree")
-
-    x, y = zip(*layout.coords)
-    edge_x, edge_y = [], []
-    for u, v in edges:
-        edge_x += [x[u], x[v], None]
-        edge_y += [y[u], y[v], None]
-
+    x,y = zip(*layout.coords)
+    edge_x,edge_y = [],[]
+    for u,v in edges:
+        edge_x += [x[u],x[v],None]
+        edge_y += [y[u],y[v],None]
     edge_trace = go.Scatter(x=edge_x, y=edge_y, mode="lines", hoverinfo="none")
-    node_trace = go.Scatter(
-        x=x, y=y, text=g.vs["label"], mode="markers+text", textposition="top center",
-        marker=dict(size=20, line=dict(width=2))
-    )
+    node_trace = go.Scatter(x=x, y=y, text=g.vs["label"], mode="markers+text", textposition="top center",
+                            marker=dict(size=20, line=dict(width=2)))
     fig = go.Figure([edge_trace, node_trace],
-        layout=go.Layout(margin=dict(l=0, r=0, t=20, b=0),
-                         xaxis=dict(visible=False),
-                         yaxis=dict(visible=False))
-    )
+        layout=go.Layout(margin=dict(l=0,r=0,t=20,b=0), xaxis=dict(visible=False), yaxis=dict(visible=False)))
     st.plotly_chart(fig, use_container_width=True)
 
 # --- Main UI ---
 st.title(f"Welcome, {user.get('name', '')}!")
-
 tab = st.sidebar.selectbox("Feature", ["Guide Book Chat", "Document Q&A"])
+
 if tab == "Guide Book Chat":
     st.header("Guide Book Chat")
     title   = st.text_input("Title")
@@ -217,34 +206,27 @@ if tab == "Guide Book Chat":
         else:
             pages = extract_pages_from_url(url)
             st.write(ask_concept(pages, concept))
+
 else:
     st.header("Document Q&A")
-    uploaded = st.file_uploader("Upload PDF/Image/TXT", type=["pdf", "jpg", "png", "txt"])
+    uploaded = st.file_uploader("Upload PDF/Image/TXT", type=["pdf","jpg","png","txt"])
     if uploaded:
         text = extract_text(uploaded)
         st.subheader("Learning Aids")
         choice = st.selectbox("Pick a function", [
-            "Summary", "Questions", "Flashcards", "Mnemonics",
-            "Key Terms", "Cheat Sheet", "Highlights",
-            "Critical Points", "Concept Chat", "Mind Map"
+            "Summary","Questions","Flashcards","Mnemonics",
+            "Key Terms","Cheat Sheet","Highlights",
+            "Critical Points","Concept Chat","Mind Map"
         ])
         if st.button("Run"):
-            if choice == "Summary":
-                st.write(generate_summary(text))
-            elif choice == "Questions":
-                st.write(generate_questions(text))
-            elif choice == "Flashcards":
-                st.write(generate_flashcards(text))
-            elif choice == "Mnemonics":
-                st.write(generate_mnemonics(text))
-            elif choice == "Key Terms":
-                st.write(generate_key_terms(text))
-            elif choice == "Cheat Sheet":
-                st.write(generate_cheatsheet(text))
-            elif choice == "Highlights":
-                st.write(generate_highlights(text))
-            elif choice == "Critical Points":
-                st.write(generate_critical_points(text))
+            if choice == "Summary":       st.write(generate_summary(text))
+            elif choice == "Questions":   st.write(generate_questions(text))
+            elif choice == "Flashcards":  st.write(generate_flashcards(text))
+            elif choice == "Mnemonics":   st.write(generate_mnemonics(text))
+            elif choice == "Key Terms":   st.write(generate_key_terms(text))
+            elif choice == "Cheat Sheet": st.write(generate_cheatsheet(text))
+            elif choice == "Highlights":  st.write(generate_highlights(text))
+            elif choice == "Critical Points": st.write(generate_critical_points(text))
             elif choice == "Concept Chat":
                 cc = st.text_input("Concept to explain:")
                 if cc:
