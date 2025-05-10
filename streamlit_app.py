@@ -77,7 +77,7 @@ st.markdown("""
                 cursor: pointer;
                 transition: background-color 0.3s ease;
             ">
-                Visit Vekkam Blog
+                Curious?
             </button>
         </a>
     </div>
