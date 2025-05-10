@@ -41,21 +41,21 @@ def login_ui():
     auth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
     st.markdown(f"[Login with Google]({auth_url})")
     code = st.text_input("Authorization code:")
-    if st.button("Authenticate") and code:
-        data = {
-            'code': code,
-            'client_id': CLIENT_ID,
-            'client_secret': CLIENT_SECRET,
-            'redirect_uri': REDIRECT_URI,
-            'grant_type': 'authorization_code'
-        }
-        res = requests.post('https://oauth2.googleapis.com/token', data=data).json()
-        st.session_state['token'] = res
-        userinfo = requests.get(
-            'https://www.googleapis.com/oauth2/v3/userinfo',
-            headers={'Authorization': f"Bearer {res['access_token']}"}
-        ).json()
-        st.session_state['user'] = userinfo
+    if code and st.button("Authenticate"):
+    data = {
+        'code': code,
+        'client_id': CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
+        'redirect_uri': REDIRECT_URI,
+        'grant_type': 'authorization_code'
+    }
+    res = requests.post('https://oauth2.googleapis.com/token', data=data).json()
+    st.session_state['token'] = res
+    userinfo = requests.get(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        headers={'Authorization': f"Bearer {res['access_token']}"}
+    ).json()
+    st.session_state['user'] = userinfo
 
 # --- Gemini Call ---
 def call_gemini(prompt, temp=0.7, max_tokens=2048):
