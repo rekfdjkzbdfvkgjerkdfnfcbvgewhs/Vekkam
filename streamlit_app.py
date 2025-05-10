@@ -64,6 +64,25 @@ lottie_json = load_lottie_url(lottie_url)
 st.markdown("<h1>Vekkam Premier</h1>", unsafe_allow_html=True)
 st.markdown("<h3>We're working on something big behind the scenes, so stay tuned for an unforgettable launch.</h3>", unsafe_allow_html=True)
 
+st.markdown("""
+    <div style="text-align: center; margin-top: 30px;">
+        <a href="https://vekkam.wordpress.com" target="_blank">
+            <button style="
+                background-color: #FF3131;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                font-size: 16px;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: background-color 0.3s ease;
+            ">
+                Visit Vekkam Blog
+            </button>
+        </a>
+    </div>
+""", unsafe_allow_html=True)
+
 # Lottie animation
 if lottie_json:
     st_lottie(lottie_json, height=300, key="premiere")
@@ -97,21 +116,3 @@ st.markdown("<br><h4 style='text-align: center;'>📅 Mark your calendars: June 
 # ---------------------------
 # External Link Button
 # ---------------------------
-st.markdown("""
-    <div style="text-align: center; margin-top: 30px;">
-        <a href="https://vekkam.wordpress.com" target="_blank">
-            <button style="
-                background-color: #FF3131;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                font-size: 16px;
-                border-radius: 8px;
-                cursor: pointer;
-                transition: background-color 0.3s ease;
-            ">
-                Visit Vekkam Blog
-            </button>
-        </a>
-    </div>
-""", unsafe_allow_html=True)
