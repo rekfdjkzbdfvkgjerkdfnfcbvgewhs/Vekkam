@@ -78,7 +78,7 @@ st.markdown("""
                 cursor: pointer;
                 transition: background-color 0.3s ease;
             ">
-                Curious?
+                Click to learn more
             </button>
         </a>
     </div>
