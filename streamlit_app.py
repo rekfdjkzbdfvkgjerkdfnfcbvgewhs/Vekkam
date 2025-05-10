@@ -18,7 +18,7 @@ def load_lottie_url(url: str):
 # Page configuration
 # ---------------------------
 st.set_page_config(
-    page_title="🎬 Premiere Countdown",
+    page_title="Vekkam Premiere Countdown",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -61,8 +61,8 @@ lottie_json = load_lottie_url(lottie_url)
 # ---------------------------
 # Display Content
 # ---------------------------
-st.markdown("<h1>🎬 YouTube Premiere Countdown</h1>", unsafe_allow_html=True)
-st.markdown("<h3>⏳ The show begins soon. Stay tuned!</h3>", unsafe_allow_html=True)
+st.markdown("<h1>Vekkam Premier</h1>", unsafe_allow_html=True)
+st.markdown("<h3>We're working on something big behind the scenes, so stay tuned for an unforgettable launch.</h3>", unsafe_allow_html=True)
 
 # Lottie animation
 if lottie_json:
