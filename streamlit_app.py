@@ -23,12 +23,6 @@ CSE_API_KEY    = st.secrets["google_search"]["api_key"]
 CSE_ID         = st.secrets["google_search"]["cse_id"]
 CACHE_TTL      = 3600
 
-# --- Show exact values for Google Cloud registration ---
-st.sidebar.markdown("**Authorized Redirect URI**")
-st.sidebar.code(REDIRECT_URI)
-st.sidebar.markdown("**Client ID**")
-st.sidebar.code(CLIENT_ID)
-
 # --- Session State ---
 for key in ("token", "user"):
     if key not in st.session_state:
@@ -36,7 +30,7 @@ for key in ("token", "user"):
 
 # --- OAuth Flow ---
 def ensure_logged_in():
-    params = st.experimental_get_query_params()
+    params = st.query_params()
     code = params.get("code", [None])[0]
 
     # Exchange code for token
