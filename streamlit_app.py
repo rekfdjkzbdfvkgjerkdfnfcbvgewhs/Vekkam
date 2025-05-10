@@ -11,7 +11,7 @@ import igraph as ig
 import plotly.graph_objects as go
 import re
 
-# --- Configuration using st.secrets ---
+# --- Configuration from st.secrets ---
 raw_uri       = st.secrets["google"]["redirect_uri"]
 REDIRECT_URI  = raw_uri.rstrip("/") + "/"
 CLIENT_ID     = st.secrets["google"]["client_id"]
@@ -22,24 +22,24 @@ CSE_API_KEY    = st.secrets["google_search"]["api_key"]
 CSE_ID         = st.secrets["google_search"]["cse_id"]
 CACHE_TTL      = 3600
 
-# --- Show exact values for Google Cloud registration ---
+# --- Display values for exact Cloud Console registration ---
 st.sidebar.markdown("**Authorized Redirect URI**")
 st.sidebar.code(REDIRECT_URI)
 st.sidebar.markdown("**Client ID**")
 st.sidebar.code(CLIENT_ID)
 
-# --- Session State ---
+# --- Session State init ---
 for key in ("token", "user"):
     if key not in st.session_state:
         st.session_state[key] = None
 
 # --- OAuth Flow ---
 def ensure_logged_in():
-    # Use the non-experimental API to get query params
-    params = st.get_query_params()
+    # use the experimental API to read the URL query params
+    params = st.experimental_get_query_params()
     code   = params.get("code", [None])[0]
 
-    # Exchange code for token
+    # if we got a code back and haven't tokenized yet, exchange it
     if code and not st.session_state.token:
         token_res = requests.post(
             "https://oauth2.googleapis.com/token",
@@ -56,7 +56,7 @@ def ensure_logged_in():
             st.stop()
         st.session_state.token = token_res.json()
 
-        # Fetch user info
+        # fetch user profile
         ui = requests.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
             headers={"Authorization": f"Bearer {st.session_state.token['access_token']}"}
@@ -66,7 +66,7 @@ def ensure_logged_in():
             st.stop()
         st.session_state.user = ui.json()
 
-    # If still not authenticated, show login link and halt
+    # if still no token, show the login link and halt
     if not st.session_state.token:
         auth_url = (
             "https://accounts.google.com/o/oauth2/v2/auth?"
@@ -82,10 +82,10 @@ def ensure_logged_in():
         st.markdown(f"[**Login with Google**]({auth_url})")
         st.stop()
 
-# Perform OAuth check at the top
+# perform OAuth at start
 ensure_logged_in()
 
-# --- After authentication ---
+# --- After login UI ---
 user = st.session_state.user
 st.sidebar.image(user.get("picture", ""), width=50)
 st.sidebar.write(user.get("email", ""))
@@ -93,7 +93,7 @@ if st.sidebar.button("Logout"):
     st.session_state.clear()
     st.experimental_rerun()
 
-# --- Gemini Call ---
+# --- Gemini call ---
 def call_gemini(prompt, temp=0.7, max_tokens=2048):
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/"
@@ -164,7 +164,6 @@ def plot_mind_map(json_text):
         return
 
     nodes, edges, counter = [], [], 0
-
     def add_node(node, parent=None):
         nonlocal counter
         nid = counter; counter += 1
