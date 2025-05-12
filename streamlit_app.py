@@ -91,7 +91,7 @@ if lottie_json:
 # ---------------------------
 # Countdown Logic
 # ---------------------------
-target_date = datetime(2025, 5, 31, 0, 0, 0)
+target_date = datetime(2025, 6, 1, 0, 0, 0)
 now = datetime.now()
 remaining = target_date - now
 
@@ -107,4 +107,4 @@ else:
 # ---------------------------
 # Footer Text
 # ---------------------------
-st.markdown("<br><h4 style='text-align: center;'>📅 Mark your calendars: May 31, 2025</h4>", unsafe_allow_html=True)
+st.markdown("<br><h4 style='text-align: center;'>📅 Mark your calendars: June 1, 2025</h4>", unsafe_allow_html=True)
