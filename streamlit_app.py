@@ -82,8 +82,12 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-if st.button("Open Google Form"):
-    st.markdown("[Click here to fill the form](https://forms.gle/d8fCGKfqiJiv81hR7)", unsafe_allow_html=True)
+
+st.markdown("""
+    <a href="https://forms.gle/d8fCGKfqiJiv81hR7" target="_blank">
+        <button style="padding:10px 20px; font-size:16px;">Fill Google Form</button>
+    </a>
+    """, unsafe_allow_html=True)
 
 # ---------------------------
 # Lottie animation
