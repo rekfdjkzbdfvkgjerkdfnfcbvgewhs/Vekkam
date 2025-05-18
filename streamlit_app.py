@@ -84,10 +84,23 @@ st.markdown("""
 
 
 st.markdown("""
-    <a href="https://forms.gle/d8fCGKfqiJiv81hR7" target="_blank">
-        <button style="padding:10px 20px; font-size:16px;">Fill Google Form</button>
-    </a>
-    """, unsafe_allow_html=True)
+    <div style="text-align: center; margin-top: 30px;">
+        <a href="https://forms.gle/d8fCGKfqiJiv81hR7" target="_blank">
+            <button style="
+                background-color: #FF3131;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                font-size: 16px;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: background-color 0.3s ease;
+            ">
+                Join our Waitlist
+            </button>
+        </a>
+    </div>
+""", unsafe_allow_html=True)
 
 # ---------------------------
 # Lottie animation
