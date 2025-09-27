@@ -1,4 +1,3 @@
-
 import streamlit as st
 import time
 import os
@@ -105,7 +104,7 @@ def save_session_to_history(user_id, final_notes):
 
 # --- API SELF-DIAGNOSIS & UTILITIES ---
 def check_gemini_api():
-    try: genai.get_model('models/gemini-1.5-flash'); return "Valid"
+    try: genai.get_model('models/gemini-2.5-flash-lite'); return "Valid"
     except Exception as e:
         st.sidebar.error(f"Gemini API Key in secrets is invalid: {e}")
         return "Invalid"
@@ -134,7 +133,7 @@ def chunk_text(text, source_id, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
 def process_source(file, source_type):
     try:
         source_id = f"{source_type}:{file.name}"
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
         if source_type == 'transcript':
             with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.name)[1]) as tmp:
                 tmp.write(file.getvalue())
@@ -167,7 +166,7 @@ def process_source(file, source_type):
 # --- AGENTIC WORKFLOW FUNCTIONS ---
 @gemini_api_call_with_retry
 def generate_content_outline(all_chunks, existing_outline=None):
-    model = genai.GenerativeModel('models/gemini-1.5-flash')
+    model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
     prompt_chunks = [{"chunk_id": c['chunk_id'], "text_snippet": c['text'][:200] + "..."} for c in all_chunks if c.get('text') and len(c['text'].split()) > 10]
     
     if not prompt_chunks:
@@ -197,9 +196,9 @@ def generate_content_outline(all_chunks, existing_outline=None):
 
 @gemini_api_call_with_retry
 def synthesize_note_block(topic, relevant_chunks_text, instructions):
-    model = genai.GenerativeModel('models/gemini-1.5-flash')
+    model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
     prompt = f"""
-    You are a world-class note-taker. Synthesize a detailed, clear, and well-structured note block for a single topic: "{topic}".
+    You are a world-class note-taker. Synthesize a detailed, clear, and well-structured note block for a single topic: {topic}.
     Your entire response MUST be based STRICTLY and ONLY on the provided source text. Do not introduce any external information.
     Adhere to the user instructions for formatting and style. Format the output in Markdown.
 
@@ -215,7 +214,7 @@ def synthesize_note_block(topic, relevant_chunks_text, instructions):
 
 @gemini_api_call_with_retry
 def generate_lesson_plan(outline, all_chunks):
-    model = genai.GenerativeModel('models/gemini-1.5-flash')
+    model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
     chunk_context_map = {c['chunk_id']: c['text'][:200] + "..." for c in all_chunks}
     prompt = f"""
     You are a world-class educator. Design a detailed, step-by-step lesson plan based on the provided outline and source material.
@@ -241,12 +240,12 @@ def generate_lesson_plan(outline, all_chunks):
 @gemini_api_call_with_retry
 def answer_from_context(query, context):
     """Answers a user query based ONLY on the provided context."""
-    model = genai.GenerativeModel('models/gemini-1.5-flash')
+    model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
     prompt = f"""
     You are a helpful study assistant. Your task is to answer the user question based strictly and exclusively on the provided study material context.
     Do not use any external knowledge. If the answer is not in the context, clearly state that the information is not available in the provided materials.
 
-    **user Question:**
+    **User Question:**
     {query}
 
     **Study Material Context:**
@@ -284,9 +283,178 @@ def reset_session(tool_choice):
 
 # --- LANDING PAGE ---
 def show_landing_page(auth_url):
-    """Displays the feature-rich landing page"""
-    st.markdown("<h1>Landing Page Placeholder</h1>", unsafe_allow_html=True)
-    st.link_button("Get Started - Sign in with Google", auth_url, type="primary")
+    """Displays the AARRR-framework-based landing page."""
+    st.markdown("""
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            .main {
+                background-color: #FFFFFF;
+                font-family: 'Inter', sans-serif;
+            }
+            .hero-container {
+                padding: 4rem 1rem;
+                text-align: center;
+            }
+            .hero-title {
+                font-size: 3.5rem;
+                font-weight: 700;
+                background: -webkit-linear-gradient(45deg, #004080, #007BFF);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                margin-bottom: 1rem;
+            }
+            .hero-subtitle {
+                font-size: 1.25rem;
+                color: #555;
+                max-width: 700px;
+                margin: 0 auto 2rem auto;
+                line-height: 1.6;
+            }
+            .how-it-works-card {
+                padding: 1.5rem; text-align: center;
+            }
+            .how-it-works-card .step-number {
+                display: inline-block; width: 40px; height: 40px; line-height: 40px;
+                border-radius: 50%; background-color: #E6F2FF; color: #007BFF;
+                font-weight: 700; font-size: 1.2rem; margin-bottom: 1rem;
+            }
+            .comparison-table-premium {
+                width: 100%; border-collapse: separate; border-spacing: 0;
+                border-radius: 12px; overflow: hidden;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #E0E0E0;
+            }
+            .comparison-table-premium th, .comparison-table-premium td {
+                padding: 1.2rem 1rem; text-align: left; border-bottom: 1px solid #E0E0E0;
+            }
+            .comparison-table-premium th {
+                background-color: #F8F9FA; color: #333; font-weight: 600;
+            }
+            .comparison-table-premium tbody tr:last-child td { border-bottom: none; }
+            .comparison-table-premium .check {
+                color: #1E90FF; font-weight: bold; text-align: center; font-size: 1.2rem;
+            }
+            .comparison-table-premium .cross {
+                color: #B0B0B0; font-weight: bold; text-align: center; font-size: 1.2rem;
+            }
+            .cta-button a {
+                font-size: 1.1rem !important; font-weight: 600 !important;
+                padding: 0.8rem 2rem !important; border-radius: 8px !important;
+                background-image: linear-gradient(45deg, #007BFF, #0056b3) !important;
+                border: none !important; transition: transform 0.2s, box-shadow 0.2s !important;
+            }
+            .cta-button a:hover {
+                transform: scale(1.05);
+                box-shadow: 0 6px 15px rgba(0, 123, 255, 0.3);
+            }
+            .section-header {
+                text-align: center; color: #004080; font-weight: 700;
+                margin-top: 4rem; margin-bottom: 2rem;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # --- [A]cquisition & [A]ctivation: Hero Section ---
+    # Goal: Grab attention, state the value prop, and provide an immediate CTA.
+    with st.container():
+        st.markdown('<div class="hero-container">', unsafe_allow_html=True)
+        st.markdown('<h1 class="hero-title">From Classroom Chaos to Concept Clarity</h1>', unsafe_allow_html=True)
+        st.markdown('<p class="hero-subtitle">Stop drowning in disorganized notes and endless lectures. Vekkam transforms your course materials into a powerful, interactive knowledge base that helps you study smarter, not harder.</p>', unsafe_allow_html=True)
+        st.link_button("Activate Your Smart Study Hub", auth_url, type="primary")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.divider()
+
+    # --- [A]ctivation: The "Aha!" Moment - How It Works ---
+    # Goal: Show users how easy it is to get value, creating the "Aha!" moment.
+    st.markdown('<h2 class="section-header">Your Path to Mastery in 3 Simple Steps</h2>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3, gap="large")
+    with col1:
+        st.markdown("""
+            <div class="how-it-works-card">
+                <div class="step-number">1</div>
+                <h3>Aggregate Your Materials</h3>
+                <p>Upload everything—audio lectures, textbook chapters, slide decks, and even whiteboard photos. Consolidate your entire syllabus in one place.</p>
+            </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown("""
+            <div class="how-it-works-card">
+                <div class="step-number">2</div>
+                <h3>Synthesize & Understand</h3>
+                <p>Vekkam's AI analyzes and structures your content, creating a unified set of clear, editable notes. See the connections you never knew existed.</p>
+            </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown("""
+            <div class="how-it-works-card">
+                <div class="step-number">3</div>
+                <h3>Query, Test & Master</h3>
+                <p>Chat with your personal AI tutor and generate mock tests directly from your notes. Turn passive knowledge into active, exam-ready expertise.</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # --- [R]etention: Highlighting Long-Term Value ---
+    # Goal: Hint at why users will want to keep coming back.
+    st.markdown('<h2 class="section-header">A Knowledge Base That Grows With You</h2>', unsafe_allow_html=True)
+    st.markdown("""
+        Vekkam isn't just for one-time cramming. Every session you create builds upon the last, creating a personal, searchable library of your entire academic career. 
+        Your Personal TA becomes more intelligent about your curriculum over time, making it an indispensable tool for finals, comprehensive exams, and lifelong learning.
+    """)
+
+    # --- [A]ctivation: Competitive Advantage ---
+    # Goal: Overcome objections by showing clear superiority over alternatives.
+    st.markdown('<h2 class="section-header">The Unfair Advantage Over Other Tools</h2>', unsafe_allow_html=True)
+    st.markdown("""
+        <table class="comparison-table-premium">
+            <thead>
+                <tr>
+                    <th>Capability</th>
+                    <th>Vekkam</th>
+                    <th>ChatGPT / Gemini</th>
+                    <th>Turbolearn</th>
+                    <th>Perplexity</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Multi-Modal Synthesis (Audio, PDF, IMG)</strong></td>
+                    <td class="check">✔</td>
+                    <td class="cross">Partial</td>
+                    <td class="cross">YouTube Only</td>
+                    <td class="cross">URL/Text Only</td>
+                </tr>
+                <tr>
+                    <td><strong>Chat With <u>Your</u> Content Only</strong></td>
+                    <td class="check">✔</td>
+                    <td class="cross">✖ (General)</td>
+                    <td class="check">✔</td>
+                    <td class="cross">✖ (Web Search)</td>
+                </tr>
+                <tr>
+                    <td><strong>Integrated Mock Test Generator</strong></td>
+                    <td class="check">✔</td>
+                    <td class="cross">✖</td>
+                    <td class="cross">✖</td>
+                    <td class="cross">✖</td>
+                </tr>
+                <tr>
+                    <td><strong>Builds a Persistent Knowledge Base</strong></td>
+                    <td class="check">✔</td>
+                    <td class="cross">✖ (Chat History)</td>
+                    <td class="check">✔</td>
+                    <td class="cross">✖</td>
+                </tr>
+            </tbody>
+        </table>
+    """, unsafe_allow_html=True)
+
+    # --- [A]ctivation: Final CTA ---
+    # Goal: A final, powerful call to action for users who have scrolled this far.
+    with st.container():
+        st.markdown('<div class="hero-container">', unsafe_allow_html=True)
+        st.markdown('<h2 class="section-header" style="margin-top:2rem;">Ready to Stop Studying Harder and Start Studying Smarter?</h2>', unsafe_allow_html=True)
+        st.link_button("Get Started for Free", auth_url, type="primary")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- UI STATE FUNCTIONS for NOTE & LESSON ENGINE ---
 def show_upload_state():
@@ -528,17 +696,17 @@ def render_syllabus_input():
 def render_generating_questions():
     """Handles the background generation of questions for all stages."""
     with st.spinner("Building your test... The AI is analyzing the syllabus and crafting questions based on Bloom's Taxonomy..."):
-        mcq_questions = generate_questions_from_syllabus(st.session_state.syllabus, "MCQ", 10)
-        st.session_state.questions['mcq'] = mcq_questions
-        st.session_state.questions['fib'] = [] 
-        st.session_state.questions['short'] = []
-        st.session_state.questions['long'] = []
-
-        if mcq_questions:
+        questions_json = generate_questions_from_syllabus(st.session_state.syllabus, "MCQ", 10)
+        
+        if questions_json and "questions" in questions_json:
+            st.session_state.questions['mcq'] = questions_json["questions"]
+            st.session_state.questions['fib'] = [] 
+            st.session_state.questions['short'] = []
+            st.session_state.questions['long'] = []
             st.session_state.test_stage = 'mcq_test'
             st.rerun()
         else:
-            st.error("Failed to generate questions. Please try again with a different syllabus.")
+            st.error("Failed to generate questions. The AI could not create a test from the provided syllabus. Please try again with a more detailed or different syllabus.")
             st.session_state.test_stage = 'start'
             st.rerun()
 
@@ -559,11 +727,14 @@ def render_mcq_test():
         user_answers = {}
         for i, q in enumerate(mcq_questions):
             st.markdown(f"**{i+1}. {q['question_text']}**")
-            st.caption(f"Bloom's Taxonomy Level: {q['taxonomy_level']} ({get_bloom_level_name(q['taxonomy_level'])})")
-            options = list(q['options'].values())
-            option_keys = list(q['options'].keys())
-            selected_option_text = st.radio("Select your answer:", options, key=q['question_id'], label_visibility="collapsed")
-            user_answers[q['question_id']] = option_keys[options.index(selected_option_text)]
+            st.caption(f"Bloom's Taxonomy Level: {q.get('taxonomy_level', 'N/A')} ({get_bloom_level_name(q.get('taxonomy_level'))})")
+            # Ensure options are always presented in a consistent order
+            options_keys = sorted(q['options'].keys())
+            options_values = [q['options'][key] for key in options_keys]
+            
+            selected_option_text = st.radio("Select your answer:", options_values, key=q['question_id'], label_visibility="collapsed")
+            if selected_option_text:
+                user_answers[q['question_id']] = options_keys[options_values.index(selected_option_text)]
             st.divider()
 
         submitted = st.form_submit_button("Submit Answers")
@@ -583,12 +754,18 @@ def render_mcq_results():
     total = len(st.session_state.questions.get('mcq', []))
     st.subheader(f"MCQ Results: You scored {score} / {total}")
 
-    feedback_text = f"Based on your score of {score}, you have a good foundational knowledge. Consider reviewing topics related to questions you got wrong, especially those at the 'Analyzing' and 'Evaluating' levels of Bloom's Taxonomy." # Placeholder
-    st.session_state.feedback['mcq'] = feedback_text
+    if 'feedback' not in st.session_state or 'mcq' not in st.session_state.feedback:
+        with st.spinner("Analyzing your performance and generating feedback..."):
+            all_questions = st.session_state.questions.get('mcq', [])
+            user_answers = st.session_state.user_answers.get('mcq', {})
+            syllabus = st.session_state.syllabus
+            
+            feedback_text = generate_feedback_on_performance(score, total, all_questions, user_answers, syllabus)
+            st.session_state.feedback['mcq'] = feedback_text
     
     with st.container(border=True):
         st.subheader("💡 Suggestions for Improvement")
-        st.write(st.session_state.feedback['mcq'])
+        st.write(st.session_state.feedback.get('mcq', "No feedback generated."))
         
     if score >= 7:
         st.success("Congratulations! You've passed this stage.")
@@ -603,32 +780,87 @@ def render_mcq_results():
                     del st.session_state[key]
             st.rerun()
 
-# --- Placeholder AI & Utility Functions ---
+# --- AI & Utility Functions for Mock Test ---
 def get_bloom_level_name(level):
     """Maps a Bloom's Taxonomy level number to its name."""
+    if level is None: return "N/A"
     levels = {1: "Remembering", 2: "Understanding", 3: "Applying", 4: "Analyzing", 5: "Evaluating"}
     return levels.get(level, "Unknown")
 
+@gemini_api_call_with_retry
 def generate_questions_from_syllabus(syllabus_text, question_type, question_count):
-    """Placeholder for the AI call to generate questions."""
-    st.info(f"Simulating AI call to generate {question_count} {question_type} questions...")
-    if question_type == "MCQ":
-        # This structure should be generated by the AI based on the prompt.
-        # It follows the requested normal-like distribution of Bloom's Taxonomy levels.
-        placeholder_mcqs = [
-            {"question_id": "mcq_1", "taxonomy_level": 1, "question_text": "What is the capital of France?", "options": {"A": "London", "B": "Berlin", "C": "Paris", "D": "Madrid"}, "answer": "C"},
-            {"question_id": "mcq_2", "taxonomy_level": 2, "question_text": "Explain the main difference between a stock and a bond.", "options": {"A": "Stocks represent ownership, bonds represent debt.", "B": "Bonds represent ownership, stocks represent debt.", "C": "They are identical.", "D": "Stocks are only issued by governments."}, "answer": "A"},
-            {"question_id": "mcq_3", "taxonomy_level": 2, "question_text": "Summarize the plot of 'Hamlet'.", "options": {"A": "A comedy about mistaken identity.", "B": "A tragedy about revenge and madness.", "C": "A historical play about a king.", "D": "A romance about forbidden love."}, "answer": "B"},
-            {"question_id": "mcq_4", "taxonomy_level": 3, "question_text": "If a company has a high P/E ratio, what investment strategy does this suggest?", "options": {"A": "Value investing", "B": "Growth investing", "C": "Income investing", "D": "Index investing"}, "answer": "B"},
-            {"question_id": "mcq_5", "taxonomy_level": 3, "question_text": "Which of these is a direct application of Newton's Third Law?", "options": {"A": "A ball falling to the ground", "B": "The orbit of the moon", "C": "A rocket accelerating in space", "D": "A book resting on a table"}, "answer": "C"},
-            {"question_id": "mcq_6", "taxonomy_level": 3, "question_text": "Given a list [2, 7, 11, 15] and a target of 9, which pair adds up to the target?", "options": {"A": "[7, 11]", "B": "[2, 15]", "C": "[2, 7]", "D": "[11, 15]"}, "answer": "C"},
-            {"question_id": "mcq_7", "taxonomy_level": 3, "question_text": "Which of these is an application of Python dictionaries?", "options": {"A": "Storing ordered items", "B": "Implementing a LIFO stack", "C": "Storing key-value pairs for fast lookup", "D": "Performing complex math"}, "answer": "C"},
-            {"question_id": "mcq_8", "taxonomy_level": 4, "question_text": "Analyze the components of a laptop to determine the most critical factor for video editing performance.", "options": {"A": "Hard drive size", "B": "Screen resolution", "C": "RAM and GPU", "D": "Number of USB ports"}, "answer": "C"},
-            {"question_id": "mcq_9", "taxonomy_level": 4, "question_text": "Compare and contrast the economic policies of Keynesianism and Monetarism.", "options": {"A": "Both focus on tax cuts.", "B": "Keynesianism focuses on government spending, Monetarism on money supply.", "C": "They are the same.", "D": "Monetarism advocates for more government intervention."}, "answer": "B"},
-            {"question_id": "mcq_10", "taxonomy_level": 5, "question_text": "Evaluate the ethical implications of using AI in hiring processes.", "options": {"A": "It is always fair.", "B": "It has no ethical implications.", "C": "It removes all human bias.", "D": "It risks amplifying existing biases from training data."}, "answer": "D"}
-        ]
-        return placeholder_mcqs
-    return []
+    """Generates test questions from syllabus text using the Gemini API."""
+    model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
+    
+    prompt = f"""
+    You are an expert Question Paper Setter and an authority on Bloom's Taxonomy, tasked with creating a high-quality assessment.
+    Your goal is to generate {question_count} Multiple Choice Questions (MCQs) based STRICTLY and EXCLUSIVELY on the provided syllabus.
+
+    **Syllabus:**
+    ---
+    {syllabus_text}
+    ---
+
+    **Instructions:**
+    1.  **Strict Syllabus Adherence:** Do NOT include any questions on topics outside the provided syllabus. Every question must be directly answerable from the concepts mentioned.
+    2.  **Bloom's Taxonomy:** Distribute the questions across Bloom's Taxonomy levels to test for a range of cognitive skills. Aim for a bell-curve distribution:
+        - 1-2 questions for Level 1 (Remembering - e.g., definitions, lists).
+        - 3-4 questions for Level 2 (Understanding - e.g., explaining concepts, summarizing).
+        - 3-4 questions for Level 3 (Applying - e.g., using knowledge in new situations, solving problems).
+        - 1-2 questions for Level 4 (Analyzing - e.g., comparing, contrasting, differentiating).
+        - 0-1 questions for Level 5 (Evaluating - e.g., justifying a stand or decision).
+    3.  **High-Quality Options:** The incorrect options (distractors) should be plausible but clearly wrong. Avoid trick questions.
+    4.  **Output Format:** Your entire output must be a single, valid JSON object. Do not include any text or markdown before or after the JSON. The JSON object must have a single root key "questions", which is a list of question objects.
+    5.  **Question Object Structure:** Each object in the "questions" list must have the following keys:
+        - `question_id`: A unique string identifier (e.g., "mcq_1", "mcq_2").
+        - `taxonomy_level`: An integer from 1 to 5 representing the Bloom's Taxonomy level.
+        - `question_text`: The string containing the question itself.
+        - `options`: A JSON object with four keys: "A", "B", "C", and "D". The value for each key is the option text.
+        - `answer`: A string containing the key of the correct option (e.g., "C").
+
+    Generate the JSON now.
+    """
+    response = model.generate_content(prompt)
+    return resilient_json_parser(response.text)
+
+@gemini_api_call_with_retry
+def generate_feedback_on_performance(score, total, questions, user_answers, syllabus):
+    """Generates personalized feedback on test performance using the Gemini API."""
+    model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
+    
+    incorrect_questions = []
+    for q in questions:
+        q_id = q['question_id']
+        if user_answers.get(q_id) != q['answer']:
+            incorrect_q_info = {
+                "question": q['question_text'],
+                "correct_answer": q['options'][q['answer']],
+                "user_answer": q['options'].get(user_answers.get(q_id), "Not Answered"),
+                "taxonomy_level": q['taxonomy_level']
+            }
+            incorrect_questions.append(incorrect_q_info)
+
+    prompt = f"""
+    You are an encouraging and insightful academic coach. A student has just completed a mock test. Your task is to provide constructive, personalized feedback to help them improve.
+
+    **Student's Performance:**
+    - Score: {score} out of {total}
+    - Syllabus Tested: {syllabus}
+    - Questions they got wrong: {json.dumps(incorrect_questions, indent=2)}
+
+    **Your Task:**
+    1.  **Start with Encouragement:** Begin by acknowledging their score in a positive and motivating tone, regardless of the result.
+    2.  **Identify Patterns:** Analyze the incorrect answers. Is there a pattern? Are they struggling with a specific topic from the syllabus? Or are they struggling with a specific cognitive skill level from Bloom's Taxonomy (e.g., Level 4 'Analyzing' questions)?
+    3.  **Provide Actionable Advice:** Give specific, actionable suggestions for improvement.
+        - Instead of "study more," say "It seems you had trouble with questions related to [Specific Topic]. A good strategy would be to re-read that chapter and try to summarize the key points in your own words."
+        - If they struggled with a taxonomy level, say "Many of the questions you missed were at the 'Applying' level. This suggests you know the definitions but might need more practice using the concepts to solve problems. Try working through some practical examples for the topics you found difficult."
+    4.  **Maintain a Positive Tone:** End on a high note, reinforcing that this test is a learning tool and that they can improve with focused effort.
+    5.  **Be Concise:** Keep the feedback focused and easy to digest. Use bullet points if helpful.
+
+    Write the feedback now.
+    """
+    response = model.generate_content(prompt)
+    return response.text
 
 # --- MAIN APP ---
 def main():
@@ -670,32 +902,56 @@ def main():
     if not user_data["sessions"]:
         st.sidebar.info("Your saved sessions will appear here.")
     else:
+        # Iterate over a copy using enumerate to get a reliable index for modifications.
         for i, session in enumerate(list(user_data["sessions"])):
-            with st.sidebar.expander(f"{session['timestamp']} - {session['title']}"):
-                col1, col2 = st.columns(2)
-                if col1.button("Delete", key=f"del_{session['id']}", use_container_width=True):
-                    user_data["sessions"].pop(i)
-                    save_user_data(user_id, user_data)
-                    st.rerun()
+            # Use .get() for resilience against potentially incomplete session data.
+            with st.sidebar.expander(f"{session.get('timestamp', 'N/A')} - {session.get('title', 'Untitled')}"):
                 
                 is_editing = st.session_state.get('editing_session_id') == session['id']
+
                 if is_editing:
-                    if col2.button("Save", key=f"save_{session['id']}", type="primary", use_container_width=True):
-                        new_title = st.session_state.get(f"edit_title_{session['id']}", session['title'])
+                    # UI for when a title is being edited
+                    new_title = st.text_input(
+                        "Edit Title", 
+                        value=session['title'], 
+                        key=f"edit_title_{session['id']}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    col1, col2 = st.columns(2)
+                    if col1.button("Save", key=f"save_{session['id']}", type="primary", use_container_width=True):
                         user_data["sessions"][i]['title'] = new_title
                         save_user_data(user_id, user_data)
                         st.session_state.editing_session_id = None
                         st.rerun()
+
+                    if col2.button("Cancel", key=f"cancel_{session['id']}", use_container_width=True):
+                        st.session_state.editing_session_id = None
+                        st.rerun()
                 else:
-                    if col2.button("Edit", key=f"edit_{session['id']}", use_container_width=True):
+                    # Default UI showing topics and action buttons
+                    for note in session.get('notes', []):
+                        st.write(f"• {note['topic']}")
+                    st.divider()
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    if col1.button("👁️ View", key=f"view_{session['id']}", use_container_width=True):
+                        reset_session("Note & Lesson Engine")
+                        st.session_state.final_notes = session.get('notes', [])
+                        st.session_state.current_state = 'results'
+                        st.session_state.messages = [] # Reset chat for the newly loaded context
+                        st.rerun()
+
+                    if col2.button("✏️ Edit", key=f"edit_{session['id']}", use_container_width=True):
                         st.session_state.editing_session_id = session['id']
                         st.rerun()
-                
-                if is_editing:
-                    st.text_input("Edit Title", value=session['title'], key=f"edit_title_{session['id']}")
-                else:
-                    for note in session['notes']:
-                        st.write(f"- {note['topic']}")
+
+                    if col3.button("🗑️ Delete", key=f"del_{session['id']}", type="secondary", use_container_width=True):
+                        user_data["sessions"].pop(i)
+                        save_user_data(user_id, user_data)
+                        st.rerun()
+
     st.sidebar.divider()
 
     tool_choice = st.sidebar.radio("Select a Tool", ("Note & Lesson Engine", "Personal TA", "Mock Test Generator"), key='tool_choice')
