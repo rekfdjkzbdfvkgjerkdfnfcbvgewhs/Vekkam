@@ -434,7 +434,8 @@ def reset_session():
 # --- LEGAL POLICIES VIEW ---
 def show_policies_page(auth_url):
     """Displays the legal policies (ToS, Privacy, Return) in a dedicated view."""
-    st.markdown("<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} [data-testid='stSidebar'] {display: none;}</style>", unsafe_allow_html=True)
+    # UPDATED: Added header {visibility: hidden;} to hide share/star/github icons
+    st.markdown("<style>#MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;} [data-testid='stSidebar'] {display: none;}</style>", unsafe_allow_html=True)
 
     # Header and Navigation
     st.markdown('<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center bg-white sticky top-0 z-50 shadow-sm">', unsafe_allow_html=True)
@@ -1363,7 +1364,8 @@ def main():
             st.error(f"Authentication failed: {e}"); st.session_state.user_info = None
     
     if not st.session_state.user_info:
-        st.markdown("<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} [data-testid='stSidebar'] {display: none;}</style>", unsafe_allow_html=True)
+        # Hiding native Streamlit UI elements (Share, Menu, Footer, Sidebar)
+        st.markdown("<style>#MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;} [data-testid='stSidebar'] {display: none;}</style>", unsafe_allow_html=True)
         auth_url, _ = flow.authorization_url(prompt='consent')
         
         # New Landing View Toggle Logic
@@ -1377,7 +1379,7 @@ def main():
         
         return
 
-    # --- HIDE STREAMLIT STYLE ---
+    # --- HIDE STREAMLIT STYLE (Post-login) ---
     st.markdown("""
         <style>
             #MainMenu {visibility: hidden;}
