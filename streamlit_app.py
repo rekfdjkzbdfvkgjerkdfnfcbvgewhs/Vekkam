@@ -582,7 +582,8 @@ def show_landing_page(auth_url):
     with col2:
         st.markdown('<div class="custom-card bg-red-50 border-red-200"> <h3 class="text-lg font-semibold text-red-700">No Guided Path</h3> <p class="text-gray-700">You’re drowning in information but starving for clarity. Where do you even start?</p> </div>', unsafe_allow_html=True)
     with col3:
-        st.markdown('<div class="custom-card bg-red-50 border-red-200"> <h3 class="text-lg font-semibold text-red-700">Exam Anxiety</h3> <p class="text-gray-700">Stress zaps your confidence. Your friend's notes? Too much effort to read them now.</p> </div>', unsafe_allow_html=True)
+        # Corrected the unterminated string literal here by using triple quotes
+        st.markdown("""<div class="custom-card bg-red-50 border-red-200"> <h3 class="text-lg font-semibold text-red-700">Exam Anxiety</h3> <p class="text-gray-700">Stress zaps your confidence. Your friend's notes? Too much effort to read them now.</p> </div>""", unsafe_allow_html=True)
 
     # --- THE VEKKAM SOLUTION (Section 3) ---
     st.markdown('<h2 class="section-header">3. The Vekkam Solution</h2>', unsafe_allow_html=True)
