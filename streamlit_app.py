@@ -39,7 +39,7 @@ DATA_DIR.mkdir(exist_ok=True)
 # --- TIER LIMITS ---
 FREE_TIER_LIMIT = 10
 PAID_TIER_DAILY_LIMIT = 3
-PAYMENT_AMOUNT = 99900 # Amount in paise (e.g., 999.00 INR)
+PAYMENT_AMOUNT = 10000 # Amount in paise (e.g., 999.00 INR)
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Vekkam Engine", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
