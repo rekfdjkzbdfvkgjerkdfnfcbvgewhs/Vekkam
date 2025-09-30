@@ -37,7 +37,7 @@ DATA_DIR = Path("user_data")
 DATA_DIR.mkdir(exist_ok=True)
 
 # --- TIER LIMITS ---
-FREE_TIER_LIMIT = 1
+FREE_TIER_LIMIT = 10
 PAID_TIER_DAILY_LIMIT = 3
 PAYMENT_AMOUNT = 99900 # Amount in paise (e.g., 999.00 INR)
 
