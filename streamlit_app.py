@@ -484,7 +484,7 @@ def show_policies_page(auth_url):
         
         Due to the immediate and intangible nature of digital service access, our policy is as follows:
         
-        1. **Subscription Purchases:** All sales for the monthly "Potential Unlocked" subscription (₹999.00 INR) are **final and non-refundable** immediately upon successful payment through Razorpay.
+        1. **Subscription Purchases:** All sales for the monthly "Potential Unlocked" subscription (₹100.00 INR) are **final and non-refundable** immediately upon successful payment through Razorpay.
         2. **Exceptions:** Refunds will only be considered in cases of documented technical failure where the Service remains inaccessible for more than 48 consecutive hours after purchase.
         3. **Contact:** For refund inquiries, please contact team.vekkam@gmail.com with your Order ID and reason.
     """)
